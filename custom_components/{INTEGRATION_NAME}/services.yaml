@@ -1,0 +1,25 @@
+# Service definitions for {Integration Display Name}
+
+example_service:
+  name: Example Service
+  description: An example service that demonstrates how to define services
+  fields:
+    entity_id:
+      name: Entity
+      description: The entity to perform the action on
+      required: true
+      example: "sensor.example_sensor"
+      selector:
+        entity:
+          domain: sensor
+          integration: {INTEGRATION_NAME}
+    value:
+      name: Value
+      description: The value to set
+      required: true
+      example: 42
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
