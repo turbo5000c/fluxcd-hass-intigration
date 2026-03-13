@@ -1,26 +1,43 @@
 # FluxCD Kubernetes Integration for Home Assistant
 
-A custom Home Assistant integration that monitors **FluxCD resources in Kubernetes** using **kubernetes-asyncio**. It exposes FluxCD resource status as Home Assistant sensor entities.
+A custom Home Assistant integration that monitors **FluxCD resources in Kubernetes** using **kubernetes-asyncio**. It exposes FluxCD resource status as Home Assistant sensor entities, grouped by **category** (Sources / Deployments) and **resource type**.
 
 ## Features
 
 - **Async-first design** using `kubernetes-asyncio`
 - **DataUpdateCoordinator** for efficient polling
 - **Config flow** for easy UI-based setup
-- Monitors **GitRepository**, **Kustomization**, **HelmRelease**, and **HelmRepository** resources
+- **Category-based grouping** — resources are organized into *Sources* and *Deployments*
+- Monitors **12 FluxCD resource types** across both categories
 - Supports **in-cluster** and **kubeconfig** authentication
 - **Namespace scoping** — monitor a single namespace or all namespaces
 - **Label selector** filtering for targeted monitoring
 - **Configurable scan interval**
+- **Grouped and per-resource-type fetch functions** for flexible querying
 
-## Monitored Resources
+## Resource Categories
+
+### Sources
 
 | Resource | API Group / Version | Purpose |
 |---|---|---|
+| ArtifactGenerator | `source.toolkit.fluxcd.io/v1beta2` | Generate artifacts from various inputs |
+| Bucket | `source.toolkit.fluxcd.io/v1` | S3-compatible bucket source |
+| ExternalArtifact | `source.toolkit.fluxcd.io/v1beta2` | External artifact reference |
 | GitRepository | `source.toolkit.fluxcd.io/v1` | Source sync status, last fetched commit |
-| Kustomization | `kustomize.toolkit.fluxcd.io/v1` | Deployment reconcile status, last applied revision |
-| HelmRelease | `helm.toolkit.fluxcd.io/v2` | Helm chart status, version |
+| HelmChart | `source.toolkit.fluxcd.io/v1` | Helm chart source tracking |
 | HelmRepository | `source.toolkit.fluxcd.io/v1` | Helm repo sync status |
+| OCIRepository | `source.toolkit.fluxcd.io/v1beta2` | OCI artifact source |
+| ResourceSetInputProvider | `fluxcd.controlplane.io/v1` | Input provider for ResourceSets |
+
+### Deployments
+
+| Resource | API Group / Version | Purpose |
+|---|---|---|
+| FluxInstance | `fluxcd.controlplane.io/v1` | Flux operator instance status |
+| HelmRelease | `helm.toolkit.fluxcd.io/v2` | Helm chart deployment status |
+| Kustomization | `kustomize.toolkit.fluxcd.io/v1` | Deployment reconcile status, last applied revision |
+| ResourceSet | `fluxcd.controlplane.io/v1` | Templated resource deployment |
 
 ## Sensor States
 
@@ -34,6 +51,7 @@ Each FluxCD resource is represented as a sensor entity with one of these states:
 
 ### Common Attributes (all resource types)
 
+- `category` — Resource category (Sources, Deployments)
 - `kind` — Resource type (GitRepository, Kustomization, etc.)
 - `namespace` — Kubernetes namespace
 - `resource_name` — Resource name
@@ -74,6 +92,54 @@ Each FluxCD resource is represented as a sensor entity with one of these states:
 - `interval` — Sync interval
 - `artifact_revision` — Last fetched artifact revision
 
+### HelmChart Attributes
+
+- `chart` — Chart name
+- `version` — Version constraint
+- `source_ref_kind` / `source_ref_name` — Source reference
+- `artifact_revision` — Fetched chart revision
+
+### Bucket Attributes
+
+- `bucket_name` — S3 bucket name
+- `endpoint` — Bucket endpoint URL
+- `provider` — Cloud provider (aws, gcp, generic)
+- `region` — Bucket region
+- `artifact_revision` — Fetched artifact revision
+
+### OCIRepository Attributes
+
+- `url` — OCI repository URL
+- `tag` / `semver` / `digest` — OCI reference details
+- `artifact_revision` — Fetched artifact revision
+
+### FluxInstance Attributes
+
+- `distribution_version` — Flux distribution version
+- `distribution_registry` — Flux distribution registry
+- `cluster_domain` — Cluster domain
+- `last_applied_revision` / `last_attempted_revision` — Revision info
+
+### ResourceSet Attributes
+
+- `input_ref_kind` / `input_ref_name` — Input reference details
+- `interval` — Reconciliation interval
+
+### ArtifactGenerator Attributes
+
+- `interval` — Generation interval
+- `artifact_revision` — Generated artifact revision
+
+### ExternalArtifact Attributes
+
+- `url` — External artifact URL
+- `interval` — Fetch interval
+- `artifact_revision` — Fetched artifact revision
+
+### ResourceSetInputProvider Attributes
+
+- `resource_ref_kind` / `resource_ref_name` / `resource_ref_namespace` — Resource reference details
+
 ## Installation
 
 ### HACS (Recommended)
@@ -111,9 +177,10 @@ kubectl apply -f rbac.yaml
 ```
 
 This creates a `ClusterRole` with `get`, `list`, and `watch` permissions on:
-- `gitrepositories` and `helmrepositories` (`source.toolkit.fluxcd.io`)
+- `gitrepositories`, `helmrepositories`, `helmcharts`, `buckets`, `ocirepositories`, `artifactgenerators`, `externalartifacts` (`source.toolkit.fluxcd.io`)
 - `kustomizations` (`kustomize.toolkit.fluxcd.io`)
 - `helmreleases` (`helm.toolkit.fluxcd.io`)
+- `fluxinstances`, `resourcesets`, `resourcesetinputproviders` (`fluxcd.controlplane.io`)
 
 Edit the `ClusterRoleBinding` subject to match your Home Assistant service account.
 
@@ -123,11 +190,11 @@ Edit the `ClusterRoleBinding` subject to match your Home Assistant service accou
 custom_components/fluxcd_k8s/
 ├── __init__.py        # Integration setup and teardown
 ├── manifest.json      # Integration metadata and requirements
-├── const.py           # Constants and FluxCD CRD definitions
+├── const.py           # Constants, CRD definitions, and category groupings
 ├── config_flow.py     # Configuration UI flow
 ├── coordinator.py     # DataUpdateCoordinator for polling
-├── api.py             # Kubernetes API client using kubernetes-asyncio
-├── models.py          # Data models and parsing helpers
+├── api.py             # Kubernetes API client with grouped/per-type fetch functions
+├── models.py          # Data models and kind-specific parsing helpers
 ├── sensor.py          # Sensor entity platform
 ├── strings.json       # UI strings
 └── translations/
@@ -136,12 +203,41 @@ custom_components/fluxcd_k8s/
 
 ## How It Works
 
+### Resource Grouping by Category
+
+Resources are organized into two categories:
+
+- **Sources** — Resources that define where configuration comes from (GitRepository, HelmRepository, HelmChart, Bucket, OCIRepository, ArtifactGenerator, ExternalArtifact, ResourceSetInputProvider)
+- **Deployments** — Resources that apply configuration to the cluster (FluxInstance, HelmRelease, Kustomization, ResourceSet)
+
+Each resource carries its `category` as metadata, which is exposed as a sensor attribute.
+
 ### Querying FluxCD Resources
 
 The integration uses `kubernetes_asyncio.client.CustomObjectsApi` to explicitly fetch each FluxCD resource kind:
 
 - **Namespaced queries**: `list_namespaced_custom_object(group, version, namespace, plural)`
 - **Cluster-wide queries**: `list_cluster_custom_object(group, version, plural)`
+
+**Grouped fetch functions:**
+- `async_fetch_sources()` — Fetches all Source category resources
+- `async_fetch_deployments()` — Fetches all Deployment category resources
+
+**Per-resource-type fetch functions:**
+- `async_fetch_gitrepositories()`, `async_fetch_helmrepositories()`, `async_fetch_helmcharts()`, `async_fetch_buckets()`, `async_fetch_ocirepositories()`, `async_fetch_artifactgenerators()`, `async_fetch_externalartifacts()`, `async_fetch_resourcesetinputproviders()`
+- `async_fetch_kustomizations()`, `async_fetch_helmreleases()`, `async_fetch_fluxinstances()`, `async_fetch_resourcesets()`
+
+### Entity Organization
+
+Each FluxCD resource becomes a Home Assistant sensor entity. Entities are grouped by:
+
+1. **Category** (Sources / Deployments)
+2. **Resource type** (GitRepository, Kustomization, etc.)
+
+Example entity names:
+- `my-repo - flux-system` (Sources / Git Repositories)
+- `my-app - flux-system` (Deployments / Kustomizations)
+- `flux - flux-system` (Deployments / Flux Instances)
 
 ### Status Normalization
 
@@ -154,11 +250,11 @@ FluxCD resources store status in `status.conditions` as a list of condition obje
 
 ### Polling
 
-A single `DataUpdateCoordinator` polls all four resource kinds on the configured interval. Results are organized by kind for efficient entity lookup.
+A single `DataUpdateCoordinator` polls all resource kinds on the configured interval. Results are organized by kind for efficient entity lookup.
 
 ## Requirements
 
-- Home Assistant 2024.1.0+
+- Home Assistant 2024.9.1+
 - Python 3.11+
 - `kubernetes-asyncio` (installed automatically)
 - Kubernetes cluster with FluxCD installed
