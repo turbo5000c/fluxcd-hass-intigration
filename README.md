@@ -1,144 +1,169 @@
-# Home Assistant Integration Template
+# FluxCD Kubernetes Integration for Home Assistant
 
-A complete template repository for creating custom Home Assistant integrations following official Home Assistant developer documentation and best practices.
+A custom Home Assistant integration that monitors **FluxCD resources in Kubernetes** using **kubernetes-asyncio**. It exposes FluxCD resource status as Home Assistant sensor entities.
 
-## Quick Start
+## Features
 
-1. **Use this template**: Click "Use this template" button on GitHub to create your own repository
-2. **Clone your repository**:
+- **Async-first design** using `kubernetes-asyncio`
+- **DataUpdateCoordinator** for efficient polling
+- **Config flow** for easy UI-based setup
+- Monitors **GitRepository**, **Kustomization**, **HelmRelease**, and **HelmRepository** resources
+- Supports **in-cluster** and **kubeconfig** authentication
+- **Namespace scoping** — monitor a single namespace or all namespaces
+- **Label selector** filtering for targeted monitoring
+- **Configurable scan interval**
+
+## Monitored Resources
+
+| Resource | API Group / Version | Purpose |
+|---|---|---|
+| GitRepository | `source.toolkit.fluxcd.io/v1` | Source sync status, last fetched commit |
+| Kustomization | `kustomize.toolkit.fluxcd.io/v1` | Deployment reconcile status, last applied revision |
+| HelmRelease | `helm.toolkit.fluxcd.io/v2` | Helm chart status, version |
+| HelmRepository | `source.toolkit.fluxcd.io/v1` | Helm repo sync status |
+
+## Sensor States
+
+Each FluxCD resource is represented as a sensor entity with one of these states:
+
+- `ready` — The resource is reconciled and healthy
+- `not_ready` — The resource has a failing condition
+- `unknown` — The resource status cannot be determined
+
+## Entity Attributes
+
+### Common Attributes (all resource types)
+
+- `kind` — Resource type (GitRepository, Kustomization, etc.)
+- `namespace` — Kubernetes namespace
+- `resource_name` — Resource name
+- `suspend` — Whether the resource is suspended
+- `message` — Status message from the Ready condition
+- `reason` — Reason from the Ready condition
+- `last_reconcile_time` — Timestamp of the last reconciliation
+- `observed_generation` — Last observed generation
+- `conditions` — Full list of status conditions
+
+### GitRepository Attributes
+
+- `url` — Git repository URL
+- `branch` / `tag` / `semver` / `commit` — Git reference details
+- `artifact_revision` — Last fetched artifact revision
+- `interval` — Sync interval
+
+### Kustomization Attributes
+
+- `path` — Kustomize path
+- `prune` — Whether pruning is enabled
+- `interval` — Reconciliation interval
+- `last_applied_revision` — Last successfully applied revision
+- `source_ref_kind` / `source_ref_name` — Source reference details
+
+### HelmRelease Attributes
+
+- `chart_name` / `chart_version` — Helm chart details
+- `source_ref_kind` / `source_ref_name` — Chart source reference
+- `interval` — Reconciliation interval
+- `last_applied_revision` — Last applied chart revision
+- `last_attempted_revision` — Last attempted chart revision
+
+### HelmRepository Attributes
+
+- `url` — Helm repository URL
+- `repo_type` — Repository type
+- `interval` — Sync interval
+- `artifact_revision` — Last fetched artifact revision
+
+## Installation
+
+### HACS (Recommended)
+
+1. Add this repository as a custom repository in HACS
+2. Install the "FluxCD Kubernetes" integration
+3. Restart Home Assistant
+
+### Manual Installation
+
+1. Copy the `custom_components/fluxcd_k8s` directory to your Home Assistant `custom_components` directory:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_INTEGRATION_NAME.git
-   cd YOUR_INTEGRATION_NAME
+   cp -r custom_components/fluxcd_k8s /path/to/homeassistant/custom_components/
    ```
-3. **Replace placeholders**: Search and replace the following placeholders throughout the codebase:
-   - `{INTEGRATION_NAME}` → Your integration domain (lowercase, underscores, e.g., `my_device`)
-   - `{Integration Display Name}` → Your integration friendly name (e.g., `My Device`)
-   - `@turbo5000c` → Your GitHub username
-4. **Rename the integration directory**:
-   ```bash
-   mv custom_components/\{INTEGRATION_NAME\} custom_components/your_integration_name
-   ```
-5. **Implement your integration logic**: Follow the TODO comments in each file
+2. Restart Home Assistant
 
-## File Structure
+## Configuration
+
+1. Go to **Settings → Devices & Services**
+2. Click **+ ADD INTEGRATION**
+3. Search for **FluxCD Kubernetes**
+4. Configure the following:
+   - **Access Mode**: Select `In-Cluster` if Home Assistant runs inside Kubernetes, or `Kubeconfig File` for external access
+   - **Kubeconfig Path**: Path to your kubeconfig file (only needed for Kubeconfig mode; leave empty for the default `~/.kube/config`)
+   - **Namespace**: Kubernetes namespace to monitor (leave empty for all namespaces)
+   - **Scan Interval**: How often to poll FluxCD resources (in seconds, minimum 10, default 60)
+   - **Label Selector**: Optional Kubernetes label selector to filter resources
+
+## Kubernetes RBAC
+
+The integration requires read-only access to FluxCD custom resources. Apply the included RBAC manifest:
+
+```bash
+kubectl apply -f rbac.yaml
+```
+
+This creates a `ClusterRole` with `get`, `list`, and `watch` permissions on:
+- `gitrepositories` and `helmrepositories` (`source.toolkit.fluxcd.io`)
+- `kustomizations` (`kustomize.toolkit.fluxcd.io`)
+- `helmreleases` (`helm.toolkit.fluxcd.io`)
+
+Edit the `ClusterRoleBinding` subject to match your Home Assistant service account.
+
+## Project Structure
 
 ```
-.
-├── README.md                          # This file
-├── .gitignore                         # Python and IDE ignores
-├── .github/
-│   └── ISSUE_TEMPLATE/
-│       └── bug_report.md              # Bug report template
-└── custom_components/
-    └── {INTEGRATION_NAME}/            # Your integration directory
-        ├── __init__.py                # Main integration setup
-        ├── manifest.json              # Integration metadata
-        ├── const.py                   # Constants and configuration keys
-        ├── config_flow.py             # Configuration UI flow
-        ├── coordinator.py             # Data update coordinator
-        ├── sensor.py                  # Example sensor platform
-        ├── services.yaml              # Service definitions
-        ├── strings.json               # UI strings for config flow
-        └── translations/
-            └── en.json                # English translations
+custom_components/fluxcd_k8s/
+├── __init__.py        # Integration setup and teardown
+├── manifest.json      # Integration metadata and requirements
+├── const.py           # Constants and FluxCD CRD definitions
+├── config_flow.py     # Configuration UI flow
+├── coordinator.py     # DataUpdateCoordinator for polling
+├── api.py             # Kubernetes API client using kubernetes-asyncio
+├── models.py          # Data models and parsing helpers
+├── sensor.py          # Sensor entity platform
+├── strings.json       # UI strings
+└── translations/
+    └── en.json        # English translations
 ```
 
-## Usage Guide
+## How It Works
 
-### Creating Your Integration
+### Querying FluxCD Resources
 
-Each file in `custom_components/{INTEGRATION_NAME}/` contains detailed comments and TODO markers to guide you through the implementation:
+The integration uses `kubernetes_asyncio.client.CustomObjectsApi` to explicitly fetch each FluxCD resource kind:
 
-#### 1. manifest.json
-- Define your integration's metadata
-- Set dependencies and requirements
-- Configure integration type and IoT class
+- **Namespaced queries**: `list_namespaced_custom_object(group, version, namespace, plural)`
+- **Cluster-wide queries**: `list_cluster_custom_object(group, version, plural)`
 
-#### 2. __init__.py
-- Implement `async_setup_entry()` to initialize your integration
-- Implement `async_unload_entry()` to clean up resources
-- Add platforms (sensor, switch, light, etc.) as needed
+### Status Normalization
 
-#### 3. const.py
-- Define constants like DOMAIN, configuration keys, and default values
-- Keep all magic strings and numbers here
+FluxCD resources store status in `status.conditions` as a list of condition objects. The integration:
 
-#### 4. config_flow.py
-- Implement the configuration UI flow
-- Add validation for user input
-- Handle connection errors gracefully
+1. Parses all conditions from the resource status
+2. Finds the `Ready` condition
+3. Maps `status: "True"` → `ready`, `status: "False"` → `not_ready`, otherwise → `unknown`
+4. Extracts kind-specific attributes from `.spec` and `.status`
 
-#### 5. coordinator.py
-- Implement the `DataUpdateCoordinator` to fetch data from your device/API
-- Handle API calls and error handling
-- Set appropriate update intervals
+### Polling
 
-#### 6. sensor.py (Example Platform)
-- Create entity classes for your sensors
-- Implement properties like `native_value`, `device_class`, etc.
-- Add more platform files (switch.py, light.py) as needed
-
-#### 7. services.yaml & strings.json
-- Define custom services your integration provides
-- Add UI strings for configuration and error messages
-
-### Testing Your Integration
-
-1. **Copy to Home Assistant**:
-   ```bash
-   cp -r custom_components/{INTEGRATION_NAME} /path/to/homeassistant/custom_components/
-   ```
-
-2. **Restart Home Assistant**
-
-3. **Add Integration**:
-   - Go to Settings → Devices & Services
-   - Click "+ ADD INTEGRATION"
-   - Search for your integration name
-   - Follow the configuration flow
-
-4. **Check Logs**:
-   ```bash
-   tail -f /path/to/homeassistant/home-assistant.log | grep {INTEGRATION_NAME}
-   ```
-
-### Development Tips
-
-- Use proper type hints throughout your code
-- Follow async/await patterns for all I/O operations
-- Use the coordinator pattern to avoid polling each entity individually
-- Implement proper error handling and logging
-- Test with different error scenarios (network failures, invalid credentials, etc.)
-- Follow Home Assistant's coding standards: https://developers.home-assistant.io/docs/development_guidelines
-
-## Features Included
-
-✅ Complete integration structure following HA best practices  
-✅ Configuration flow with validation and error handling  
-✅ DataUpdateCoordinator for efficient data fetching  
-✅ Example sensor platform  
-✅ Service definitions  
-✅ Proper logging setup  
-✅ Type hints and modern Python syntax (3.11+)  
-✅ Comprehensive TODO comments for easy customization  
-✅ Translations support  
+A single `DataUpdateCoordinator` polls all four resource kinds on the configured interval. Results are organized by kind for efficient entity lookup.
 
 ## Requirements
 
-- Home Assistant 2024.1.0 or newer
-- Python 3.11 or newer
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- Home Assistant 2024.1.0+
+- Python 3.11+
+- `kubernetes-asyncio` (installed automatically)
+- Kubernetes cluster with FluxCD installed
+- Appropriate RBAC permissions (see above)
 
 ## License
 
-This template is provided as-is for creating Home Assistant integrations.
-
-## Resources
-
-- [Home Assistant Developer Docs](https://developers.home-assistant.io/)
-- [Integration Development](https://developers.home-assistant.io/docs/creating_integration_manifest)
-- [Configuration Flow](https://developers.home-assistant.io/docs/config_entries_config_flow_handler)
-- [Entity Documentation](https://developers.home-assistant.io/docs/core/entity)
+This project is provided as-is for monitoring FluxCD resources in Home Assistant.
