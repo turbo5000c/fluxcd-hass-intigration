@@ -48,6 +48,8 @@ class FluxKubernetesClient:
         creates the API client instance.
         """
         if self._access_mode == "in_cluster":
+            # load_incluster_config() configures the global default client
+            # settings from the pod's service account credentials
             config.load_incluster_config()
             self._api_client = ApiClient()
         else:

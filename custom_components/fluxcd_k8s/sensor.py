@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -42,11 +43,18 @@ async def async_setup_entry(
 
     async_add_entities(sensors)
 
+    # Track which unique IDs have already been added as entities
+    known_ids: set[str] = {s.unique_id for s in sensors if s.unique_id}
+
     # Register a listener to add new entities when resources are discovered
     entry.async_on_unload(
         coordinator.async_add_listener(
-            lambda: _async_check_new_entities(
-                coordinator, entry, async_add_entities
+            partial(
+                _async_check_new_entities,
+                coordinator,
+                entry,
+                async_add_entities,
+                known_ids,
             )
         )
     )
@@ -56,21 +64,18 @@ def _async_check_new_entities(
     coordinator: FluxCDCoordinator,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
+    known_ids: set[str],
 ) -> None:
     """Check for new FluxCD resources and add entities for them."""
     if not coordinator.data:
         return
 
-    existing_ids: set[str] = set()
-    for entity in coordinator.async_contexts():
-        if isinstance(entity, str):
-            existing_ids.add(entity)
-
     new_sensors: list[FluxCDResourceSensor] = []
     for resources in coordinator.data.values():
         for resource in resources:
             unique_id = _build_unique_id(entry.entry_id, resource)
-            if unique_id not in existing_ids:
+            if unique_id not in known_ids:
+                known_ids.add(unique_id)
                 new_sensors.append(
                     FluxCDResourceSensor(coordinator, entry, resource)
                 )
