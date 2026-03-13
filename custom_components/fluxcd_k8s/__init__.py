@@ -23,6 +23,7 @@ from .const import (
     DEFAULT_NAMESPACE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    FLUX_RESOURCES,
 )
 from .coordinator import FluxCDCoordinator
 
@@ -69,11 +70,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store the coordinator in hass.data for access by platforms
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Register hub and category devices in the device registry so that
-    # sensor entities are visually grouped by category (Sources / Deployments).
+    # Register hub, category, and resource type devices in the device
+    # registry so that sensor entities are grouped hierarchically:
+    # FluxCD (hub) → Sources / Deployments → Git Repositories / Kustomizations / etc.
     device_reg = dr.async_get(hass)
 
-    # Hub device - acts as the parent for category devices
+    # Hub device - top-level parent for the integration
     device_reg.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
@@ -82,7 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         model="Kubernetes GitOps",
     )
 
-    # Category devices - one per category, linked to the hub via via_device
+    # Category devices - one per category, linked to the hub
     for category in (CATEGORY_SOURCES, CATEGORY_DEPLOYMENTS):
         device_reg.async_get_or_create(
             config_entry_id=entry.entry_id,
@@ -91,6 +93,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             manufacturer="FluxCD",
             model=f"FluxCD {category}",
             via_device=(DOMAIN, entry.entry_id),
+        )
+
+    # Resource type devices - one per CRD kind, linked to its category
+    for flux_crd in FLUX_RESOURCES:
+        kind = flux_crd["kind"]
+        category = flux_crd["category"]
+        resource_type = flux_crd["resource_type"]
+        device_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_{kind}")},
+            name=resource_type,
+            manufacturer="FluxCD",
+            model=f"FluxCD {kind}",
+            via_device=(DOMAIN, f"{entry.entry_id}_{category}"),
         )
 
     # Set up all platforms for this integration

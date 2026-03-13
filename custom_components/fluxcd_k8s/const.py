@@ -37,6 +37,7 @@ FLUX_GITREPOSITORY = {
     "plural": "gitrepositories",
     "kind": "GitRepository",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Git Repositories",
 }
 
 FLUX_HELMREPOSITORY = {
@@ -45,6 +46,7 @@ FLUX_HELMREPOSITORY = {
     "plural": "helmrepositories",
     "kind": "HelmRepository",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Helm Repositories",
 }
 
 FLUX_HELMCHART = {
@@ -53,6 +55,7 @@ FLUX_HELMCHART = {
     "plural": "helmcharts",
     "kind": "HelmChart",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Helm Charts",
 }
 
 FLUX_BUCKET = {
@@ -61,6 +64,7 @@ FLUX_BUCKET = {
     "plural": "buckets",
     "kind": "Bucket",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Buckets",
 }
 
 FLUX_OCIREPOSITORY = {
@@ -69,6 +73,7 @@ FLUX_OCIREPOSITORY = {
     "plural": "ocirepositories",
     "kind": "OCIRepository",
     "category": CATEGORY_SOURCES,
+    "resource_type": "OCI Repositories",
 }
 
 FLUX_ARTIFACTGENERATOR = {
@@ -77,6 +82,7 @@ FLUX_ARTIFACTGENERATOR = {
     "plural": "artifactgenerators",
     "kind": "ArtifactGenerator",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Artifact Generators",
 }
 
 FLUX_EXTERNALARTIFACT = {
@@ -85,6 +91,7 @@ FLUX_EXTERNALARTIFACT = {
     "plural": "externalartifacts",
     "kind": "ExternalArtifact",
     "category": CATEGORY_SOURCES,
+    "resource_type": "External Artifacts",
 }
 
 FLUX_RESOURCESETINPUTPROVIDER = {
@@ -93,6 +100,7 @@ FLUX_RESOURCESETINPUTPROVIDER = {
     "plural": "resourcesetinputproviders",
     "kind": "ResourceSetInputProvider",
     "category": CATEGORY_SOURCES,
+    "resource_type": "Resource Set Input Providers",
 }
 
 # Deployments
@@ -102,6 +110,7 @@ FLUX_KUSTOMIZATION = {
     "plural": "kustomizations",
     "kind": "Kustomization",
     "category": CATEGORY_DEPLOYMENTS,
+    "resource_type": "Kustomizations",
 }
 
 FLUX_HELMRELEASE = {
@@ -110,6 +119,7 @@ FLUX_HELMRELEASE = {
     "plural": "helmreleases",
     "kind": "HelmRelease",
     "category": CATEGORY_DEPLOYMENTS,
+    "resource_type": "Helm Releases",
 }
 
 FLUX_FLUXINSTANCE = {
@@ -118,6 +128,7 @@ FLUX_FLUXINSTANCE = {
     "plural": "fluxinstances",
     "kind": "FluxInstance",
     "category": CATEGORY_DEPLOYMENTS,
+    "resource_type": "Flux Instances",
 }
 
 FLUX_RESOURCESET = {
@@ -126,6 +137,7 @@ FLUX_RESOURCESET = {
     "plural": "resourcesets",
     "kind": "ResourceSet",
     "category": CATEGORY_DEPLOYMENTS,
+    "resource_type": "Resource Sets",
 }
 
 # Grouped lists

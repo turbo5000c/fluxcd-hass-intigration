@@ -133,3 +133,22 @@ class TestFluxCRDDefinitions:
     def test_categories(self):
         assert const.CATEGORY_SOURCES == "Sources"
         assert const.CATEGORY_DEPLOYMENTS == "Deployments"
+
+    def test_all_crds_have_resource_type(self):
+        """Every CRD definition must include a human-readable resource_type."""
+        for crd in const.FLUX_RESOURCES:
+            assert "resource_type" in crd, f"{crd['kind']} missing resource_type"
+            assert isinstance(crd["resource_type"], str)
+            assert len(crd["resource_type"]) > 0
+
+    def test_resource_type_values(self):
+        """Verify resource_type display names for key CRDs."""
+        assert const.FLUX_GITREPOSITORY["resource_type"] == "Git Repositories"
+        assert const.FLUX_KUSTOMIZATION["resource_type"] == "Kustomizations"
+        assert const.FLUX_HELMRELEASE["resource_type"] == "Helm Releases"
+        assert const.FLUX_HELMREPOSITORY["resource_type"] == "Helm Repositories"
+        assert const.FLUX_HELMCHART["resource_type"] == "Helm Charts"
+        assert const.FLUX_BUCKET["resource_type"] == "Buckets"
+        assert const.FLUX_OCIREPOSITORY["resource_type"] == "OCI Repositories"
+        assert const.FLUX_FLUXINSTANCE["resource_type"] == "Flux Instances"
+        assert const.FLUX_RESOURCESET["resource_type"] == "Resource Sets"

@@ -10,12 +10,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CATEGORY_SOURCES, DOMAIN, STATE_UNKNOWN
+from .const import CATEGORY_SOURCES, DOMAIN, FLUX_RESOURCES, STATE_UNKNOWN
 from .coordinator import FluxCDCoordinator
 from .models import FluxResource
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
+
+# Map resource kind to its display name for device naming
+_KIND_TO_RESOURCE_TYPE: dict[str, str] = {
+    crd["kind"]: crd["resource_type"] for crd in FLUX_RESOURCES
+}
 
 
 async def async_setup_entry(
@@ -111,21 +116,25 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         self._resource_namespace = resource.namespace
 
         self._attr_unique_id = _build_unique_id(entry.entry_id, resource)
-        self._attr_name = (
-            f"FluxCD {resource.kind} {resource.namespace}/{resource.name}"
-        )
+        self._attr_name = f"{resource.name} - {resource.namespace}"
         self._attr_icon = "mdi:kubernetes"
 
-        # Each entity belongs to a category device (Sources or Deployments).
-        # The category device is created in __init__.py and linked to the
-        # hub device via via_device.
+        # Each entity belongs to a resource type device (e.g., "Git Repositories")
+        # which is a child of a category device (Sources or Deployments).
+        # The device hierarchy is: Hub → Category → Resource Type → Entity
+        # Device identifiers use kind (e.g., "entry_id_GitRepository") for
+        # resource type devices, and category (e.g., "entry_id_Sources") for
+        # category devices.
+        kind = resource.kind
         category = resource.category or CATEGORY_SOURCES
+        resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
+
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{entry.entry_id}_{category}")},
-            "name": category,
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_{kind}")},
+            "name": resource_type,
             "manufacturer": "FluxCD",
-            "model": f"FluxCD {category}",
-            "via_device": (DOMAIN, entry.entry_id),
+            "model": f"FluxCD {kind}",
+            "via_device": (DOMAIN, f"{entry.entry_id}_{category}"),
         }
 
     def _find_resource(self) -> FluxResource | None:
