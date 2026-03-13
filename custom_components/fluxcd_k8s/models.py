@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -312,7 +313,7 @@ def _parse_resource_set_input_provider_attrs(
 # Map resource kind to its attribute parser
 _KIND_ATTR_PARSERS: dict[
     str,
-    Any,
+    Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]],
 ] = {
     "GitRepository": _parse_git_repository_attrs,
     "Kustomization": _parse_kustomization_attrs,
