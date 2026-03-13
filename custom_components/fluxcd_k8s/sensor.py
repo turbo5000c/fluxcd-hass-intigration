@@ -161,6 +161,7 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
             return {}
 
         attrs: dict[str, Any] = {
+            "category": resource.category,
             "kind": resource.kind,
             "namespace": resource.namespace,
             "resource_name": resource.name,
