@@ -9,9 +9,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .api import FluxKubernetesClient
 from .const import (
+    CATEGORY_DEPLOYMENTS,
+    CATEGORY_SOURCES,
     CONF_ACCESS_MODE,
     CONF_KUBECONFIG_PATH,
     CONF_LABEL_SELECTOR,
@@ -65,6 +68,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Store the coordinator in hass.data for access by platforms
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Register hub and category devices in the device registry so that
+    # sensor entities are visually grouped by category (Sources / Deployments).
+    device_reg = dr.async_get(hass)
+
+    # Hub device - acts as the parent for category devices
+    device_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=entry.title,
+        manufacturer="FluxCD",
+        model="Kubernetes GitOps",
+    )
+
+    # Category devices - one per category, linked to the hub via via_device
+    for category in (CATEGORY_SOURCES, CATEGORY_DEPLOYMENTS):
+        device_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_{category}")},
+            name=category,
+            manufacturer="FluxCD",
+            model=f"FluxCD {category}",
+            via_device=(DOMAIN, entry.entry_id),
+        )
 
     # Set up all platforms for this integration
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

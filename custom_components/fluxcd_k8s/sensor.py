@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, STATE_UNKNOWN
+from .const import CATEGORY_SOURCES, DOMAIN, STATE_UNKNOWN
 from .coordinator import FluxCDCoordinator
 from .models import FluxResource
 
@@ -116,11 +116,16 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         )
         self._attr_icon = "mdi:kubernetes"
 
+        # Each entity belongs to a category device (Sources or Deployments).
+        # The category device is created in __init__.py and linked to the
+        # hub device via via_device.
+        category = resource.category or CATEGORY_SOURCES
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": entry.title,
+            "identifiers": {(DOMAIN, f"{entry.entry_id}_{category}")},
+            "name": category,
             "manufacturer": "FluxCD",
-            "model": "Kubernetes GitOps",
+            "model": f"FluxCD {category}",
+            "via_device": (DOMAIN, entry.entry_id),
         }
 
     def _find_resource(self) -> FluxResource | None:
