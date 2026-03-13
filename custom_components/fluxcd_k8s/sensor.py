@@ -116,7 +116,7 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         self._resource_namespace = resource.namespace
 
         self._attr_unique_id = _build_unique_id(entry.entry_id, resource)
-        self._attr_name = f"{resource.name} - {resource.namespace}"
+        self._attr_name = f"{resource.namespace}/{resource.name}"
         self._attr_icon = "mdi:kubernetes"
 
         # Each entity belongs to a resource type device (e.g., "Git Repositories")
