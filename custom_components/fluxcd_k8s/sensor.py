@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import partial
-import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -11,14 +10,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, STATE_UNKNOWN
 from .coordinator import FluxCDCoordinator
 from .models import FluxResource
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -144,7 +141,7 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         """Return the ready status of the FluxCD resource."""
         resource = self._find_resource()
         if resource is None:
-            return "unknown"
+            return STATE_UNKNOWN
         return resource.ready_status
 
     @property

@@ -8,7 +8,7 @@ from typing import Any
 from kubernetes_asyncio import client, config
 from kubernetes_asyncio.client import ApiClient, CustomObjectsApi
 
-from .const import FLUX_RESOURCES
+from .const import ACCESS_MODE_IN_CLUSTER, FLUX_RESOURCES
 from .models import FluxResource, parse_flux_resource
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class FluxKubernetesClient:
         Loads the appropriate configuration based on access_mode and
         creates the API client instance.
         """
-        if self._access_mode == "in_cluster":
+        if self._access_mode == ACCESS_MODE_IN_CLUSTER:
             # load_incluster_config() configures the global default client
             # settings from the pod's service account credentials
             config.load_incluster_config()

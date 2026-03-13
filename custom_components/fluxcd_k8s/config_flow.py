@@ -112,9 +112,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                # Create a unique ID based on access mode and namespace
+                # Create a unique ID incorporating access mode, kubeconfig path,
+                # namespace, and label selector to allow multiple configurations
                 namespace = user_input.get(CONF_NAMESPACE, DEFAULT_NAMESPACE) or "all"
-                unique_id = f"{user_input[CONF_ACCESS_MODE]}_{namespace}"
+                kubeconfig = user_input.get(CONF_KUBECONFIG_PATH, "")
+                label_sel = user_input.get(CONF_LABEL_SELECTOR, "")
+                unique_id = (
+                    f"{user_input[CONF_ACCESS_MODE]}_{kubeconfig}_{namespace}"
+                    f"_{label_sel}"
+                )
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
 

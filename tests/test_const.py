@@ -2,21 +2,9 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
-
-def _import_directly(name: str, filepath: Path):
-    spec = importlib.util.spec_from_file_location(name, filepath)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_const_path = Path(__file__).parent.parent / "custom_components" / "fluxcd_k8s" / "const.py"
-const = _import_directly("fluxcd_k8s_const", _const_path)
+# The conftest.py sets up fluxcd_k8s as a proper package, so we can
+# import const directly from it.
+from fluxcd_k8s import const
 
 
 class TestFluxCRDDefinitions:

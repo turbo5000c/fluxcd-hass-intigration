@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .const import STATE_NOT_READY, STATE_READY, STATE_UNKNOWN
+
 
 @dataclass
 class FluxCondition:
@@ -75,12 +77,12 @@ def determine_ready_status(conditions: list[FluxCondition]) -> str:
     """
     ready = get_ready_condition(conditions)
     if ready is None:
-        return "unknown"
+        return STATE_UNKNOWN
     if ready.status == "True":
-        return "ready"
+        return STATE_READY
     if ready.status == "False":
-        return "not_ready"
-    return "unknown"
+        return STATE_NOT_READY
+    return STATE_UNKNOWN
 
 
 def parse_flux_resource(raw: dict[str, Any], kind: str) -> FluxResource:

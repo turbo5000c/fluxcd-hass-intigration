@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
-# Import models directly to avoid importing the fluxcd_k8s package __init__.py
-# which requires homeassistant. The conftest.py registers the module as
-# 'fluxcd_k8s_models' via importlib for standalone testing.
-from fluxcd_k8s_models import (
+# Import from fluxcd_k8s.models using the package structure set up
+# in conftest.py, which bypasses __init__.py (requires homeassistant).
+from fluxcd_k8s.models import (
     FluxCondition,
-    FluxResource,
     determine_ready_status,
     get_ready_condition,
     parse_conditions,
