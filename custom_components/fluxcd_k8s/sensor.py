@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, FLUX_RESOURCES, STATE_UNKNOWN
 from .coordinator import FluxCDCoordinator
-from .models import FluxResource
+from .models import FluxResource, _get_condition_flag
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -174,36 +174,49 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes for the FluxCD resource.
 
-        Includes common fields (kind, namespace, suspend, conditions)
-        and kind-specific attributes (url, chart, path, etc.).
+        Primary attributes give an at-a-glance view of the resource.
+        Diagnostic attributes preserve lower-level details for debugging.
         """
         resource = self._find_resource()
         if resource is None:
             return {}
 
+        ready_cond = None
+        for cond in resource.conditions:
+            if cond.type == "Ready":
+                ready_cond = cond
+                break
+
+        # --- Primary attributes ---
         attrs: dict[str, Any] = {
-            "category": resource.category,
+            "category": resource.category.lower(),
             "kind": resource.kind,
             "namespace": resource.namespace,
             "resource_name": resource.name,
-            "suspend": resource.suspend,
-            "message": resource.message,
+            "suspended": resource.suspend,
             "reason": resource.reason,
-            "last_reconcile_time": resource.last_reconcile_time,
-            "observed_generation": resource.observed_generation,
-            "conditions": [
-                {
-                    "type": c.type,
-                    "status": c.status,
-                    "reason": c.reason,
-                    "message": c.message,
-                    "last_transition_time": c.last_transition_time,
-                }
-                for c in resource.conditions
-            ],
+            "message": resource.message,
+            "reconcile_time": resource.reconcile_time,
         }
 
-        # Add kind-specific extra attributes
+        # Add kind-specific primary attributes (including summary)
         attrs.update(resource.extra_attributes)
+
+        # --- Diagnostic attributes ---
+        diagnostic: dict[str, Any] = {
+            "observed_generation": resource.observed_generation,
+            "ready_condition": _get_condition_flag(resource.conditions, "Ready"),
+            "artifact_in_storage": _get_condition_flag(
+                resource.conditions, "ArtifactInStorage"
+            ),
+            "last_transition_time": ready_cond.last_transition_time
+            if ready_cond
+            else "",
+        }
+
+        # Add kind-specific diagnostic attributes (interval, artifact_revision, etc.)
+        diagnostic.update(resource.diagnostic_attributes)
+
+        attrs.update(diagnostic)
 
         return attrs

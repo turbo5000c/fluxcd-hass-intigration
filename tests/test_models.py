@@ -126,8 +126,22 @@ class TestDetermineReadyStatus:
         conds = [FluxCondition("Ready", "Unknown", "", "", "")]
         assert determine_ready_status(conds) == "unknown"
 
-    def test_no_ready_condition(self):
+    def test_no_ready_condition_with_reconciling(self):
+        """No Ready condition but Reconciling=True should return progressing."""
         conds = [FluxCondition("Reconciling", "True", "", "", "")]
+        assert determine_ready_status(conds) == "progressing"
+
+    def test_not_ready_with_reconciling(self):
+        """Ready=False but Reconciling=True should return progressing."""
+        conds = [
+            FluxCondition("Ready", "False", "", "", ""),
+            FluxCondition("Reconciling", "True", "", "", ""),
+        ]
+        assert determine_ready_status(conds) == "progressing"
+
+    def test_no_ready_condition_no_reconciling(self):
+        """No Ready and no Reconciling condition should return unknown."""
+        conds = [FluxCondition("Stalled", "True", "", "", "")]
         assert determine_ready_status(conds) == "unknown"
 
     def test_empty_conditions(self):
@@ -166,11 +180,29 @@ class TestParseGitRepository:
         assert resource.message == "stored artifact"
         assert resource.suspend is False
         assert resource.observed_generation == 3
+        # Primary attributes
         assert resource.extra_attributes["url"] == "https://github.com/example/repo"
         assert resource.extra_attributes["branch"] == "main"
-        assert resource.extra_attributes["artifact_revision"] == "main@sha1:abc123"
-        assert resource.extra_attributes["artifact_checksum"] == "sha256:def456"
-        assert resource.extra_attributes["interval"] == "5m"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["artifact_revision"] == "main@sha1:abc123"
+        assert resource.diagnostic_attributes["artifact_checksum"] == "sha256:def456"
+        assert resource.diagnostic_attributes["interval"] == "5m"
+
+    def test_summary_with_branch_and_url(self):
+        raw = _make_raw_resource(
+            kind="GitRepository",
+            name="my-repo",
+            namespace="flux-system",
+            conditions=[_make_condition(status="True")],
+            spec={
+                "url": "https://github.com/example/repo",
+                "ref": {"branch": "main"},
+            },
+        )
+        resource = parse_flux_resource(raw, "GitRepository", "Sources")
+        assert "my-repo" in resource.extra_attributes["summary"]
+        assert "main" in resource.extra_attributes["summary"]
+        assert "https://github.com/example/repo" in resource.extra_attributes["summary"]
 
     def test_suspended_resource(self):
         raw = _make_raw_resource(
@@ -179,6 +211,16 @@ class TestParseGitRepository:
         )
         resource = parse_flux_resource(raw, "GitRepository", "Sources")
         assert resource.suspend is True
+        assert resource.ready_status == "suspended"
+
+    def test_progressing_resource(self):
+        raw = _make_raw_resource(
+            conditions=[
+                _make_condition(cond_type="Reconciling", status="True"),
+            ],
+        )
+        resource = parse_flux_resource(raw, "GitRepository", "Sources")
+        assert resource.ready_status == "progressing"
 
     def test_empty_status(self):
         raw = _make_raw_resource(conditions=[])
@@ -217,12 +259,13 @@ class TestParseKustomization:
         assert resource.kind == "Kustomization"
         assert resource.name == "my-kustomization"
         assert resource.category == "Deployments"
+        # Primary attributes
         assert resource.extra_attributes["path"] == "./clusters/production"
         assert resource.extra_attributes["prune"] is True
-        assert resource.extra_attributes["interval"] == "10m"
-        assert resource.extra_attributes["last_applied_revision"] == "main@sha1:abc123"
-        assert resource.extra_attributes["source_ref_kind"] == "GitRepository"
-        assert resource.extra_attributes["source_ref_name"] == "my-repo"
+        assert resource.extra_attributes["source"] == "GitRepository/flux-system/my-repo"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["interval"] == "10m"
+        assert resource.diagnostic_attributes["last_applied_revision"] == "main@sha1:abc123"
 
 
 # --- parse_flux_resource: HelmRelease ---
@@ -259,12 +302,13 @@ class TestParseHelmRelease:
         assert resource.name == "my-release"
         assert resource.namespace == "default"
         assert resource.category == "Deployments"
+        # Primary attributes
         assert resource.extra_attributes["chart_name"] == "nginx"
         assert resource.extra_attributes["chart_version"] == "1.0.0"
-        assert resource.extra_attributes["source_ref_kind"] == "HelmRepository"
-        assert resource.extra_attributes["source_ref_name"] == "bitnami"
-        assert resource.extra_attributes["last_applied_revision"] == "1.0.0"
-        assert resource.extra_attributes["last_release_revision"] == 3
+        assert resource.extra_attributes["source"] == "HelmRepository/bitnami"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["last_applied_revision"] == "1.0.0"
+        assert resource.diagnostic_attributes["last_release_revision"] == 3
 
 
 # --- parse_flux_resource: HelmRepository ---
@@ -292,10 +336,12 @@ class TestParseHelmRepository:
         resource = parse_flux_resource(raw, "HelmRepository", "Sources")
         assert resource.kind == "HelmRepository"
         assert resource.category == "Sources"
+        # Primary attributes
         assert resource.extra_attributes["url"] == "https://charts.bitnami.com/bitnami"
         assert resource.extra_attributes["repo_type"] == "default"
-        assert resource.extra_attributes["interval"] == "1h"
-        assert resource.extra_attributes["artifact_revision"] == "sha256:abc123"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["interval"] == "1h"
+        assert resource.diagnostic_attributes["artifact_revision"] == "sha256:abc123"
 
 
 # --- parse_flux_resource: HelmChart ---
@@ -328,11 +374,28 @@ class TestParseHelmChart:
         resource = parse_flux_resource(raw, "HelmChart", "Sources")
         assert resource.kind == "HelmChart"
         assert resource.category == "Sources"
+        # Primary attributes
         assert resource.extra_attributes["chart"] == "podinfo"
         assert resource.extra_attributes["version"] == "6.*"
-        assert resource.extra_attributes["source_ref_kind"] == "HelmRepository"
-        assert resource.extra_attributes["source_ref_name"] == "podinfo"
-        assert resource.extra_attributes["artifact_revision"] == "6.5.0"
+        assert resource.extra_attributes["source"] == "HelmRepository/flux-system/podinfo"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["artifact_revision"] == "6.5.0"
+        assert resource.diagnostic_attributes["interval"] == "5m"
+
+    def test_summary(self):
+        raw = _make_raw_resource(
+            kind="HelmChart",
+            name="traefik-traefik",
+            namespace="traefik",
+            conditions=[_make_condition(status="True")],
+            spec={
+                "chart": "traefik",
+                "version": "38.0.2",
+                "sourceRef": {"kind": "HelmRepository", "name": "traefik"},
+            },
+        )
+        resource = parse_flux_resource(raw, "HelmChart", "Sources")
+        assert resource.extra_attributes["summary"] == "traefik 38.0.2 from HelmRepository/traefik"
 
 
 # --- parse_flux_resource: Bucket ---
@@ -362,11 +425,14 @@ class TestParseBucket:
         resource = parse_flux_resource(raw, "Bucket", "Sources")
         assert resource.kind == "Bucket"
         assert resource.category == "Sources"
+        # Primary attributes
         assert resource.extra_attributes["bucket_name"] == "my-s3-bucket"
         assert resource.extra_attributes["endpoint"] == "s3.amazonaws.com"
         assert resource.extra_attributes["provider"] == "aws"
         assert resource.extra_attributes["region"] == "us-east-1"
-        assert resource.extra_attributes["artifact_revision"] == "sha256:bucket123"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["artifact_revision"] == "sha256:bucket123"
+        assert resource.diagnostic_attributes["interval"] == "30m"
 
 
 # --- parse_flux_resource: OCIRepository ---
@@ -394,10 +460,13 @@ class TestParseOCIRepository:
         resource = parse_flux_resource(raw, "OCIRepository", "Sources")
         assert resource.kind == "OCIRepository"
         assert resource.category == "Sources"
+        # Primary attributes
         assert resource.extra_attributes["url"] == "oci://ghcr.io/my-org/my-manifests"
         assert resource.extra_attributes["tag"] == "latest"
         assert resource.extra_attributes["semver"] == ">=1.0.0"
-        assert resource.extra_attributes["artifact_revision"] == "latest@sha256:abc"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["artifact_revision"] == "latest@sha256:abc"
+        assert resource.diagnostic_attributes["interval"] == "10m"
 
 
 # --- parse_flux_resource: FluxInstance ---
@@ -425,10 +494,12 @@ class TestParseFluxInstance:
         resource = parse_flux_resource(raw, "FluxInstance", "Deployments")
         assert resource.kind == "FluxInstance"
         assert resource.category == "Deployments"
+        # Primary attributes
         assert resource.extra_attributes["distribution_version"] == "2.x"
         assert resource.extra_attributes["distribution_registry"] == "ghcr.io/fluxcd"
         assert resource.extra_attributes["cluster_domain"] == "cluster.local"
-        assert resource.extra_attributes["last_applied_revision"] == "v2.3.0"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["last_applied_revision"] == "v2.3.0"
 
 
 # --- parse_flux_resource: ResourceSet ---
@@ -448,9 +519,10 @@ class TestParseResourceSet:
         resource = parse_flux_resource(raw, "ResourceSet", "Deployments")
         assert resource.kind == "ResourceSet"
         assert resource.category == "Deployments"
-        assert resource.extra_attributes["input_ref_kind"] == "ConfigMap"
-        assert resource.extra_attributes["input_ref_name"] == "my-inputs"
-        assert resource.extra_attributes["interval"] == "5m"
+        # Primary attributes: flattened source ref
+        assert resource.extra_attributes["source"] == "ConfigMap/my-inputs"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["interval"] == "5m"
 
 
 # --- parse_flux_resource: ArtifactGenerator ---
@@ -470,8 +542,9 @@ class TestParseArtifactGenerator:
         resource = parse_flux_resource(raw, "ArtifactGenerator", "Sources")
         assert resource.kind == "ArtifactGenerator"
         assert resource.category == "Sources"
-        assert resource.extra_attributes["interval"] == "15m"
-        assert resource.extra_attributes["artifact_revision"] == "gen-rev"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["interval"] == "15m"
+        assert resource.diagnostic_attributes["artifact_revision"] == "gen-rev"
 
 
 # --- parse_flux_resource: ExternalArtifact ---
@@ -491,9 +564,11 @@ class TestParseExternalArtifact:
         resource = parse_flux_resource(raw, "ExternalArtifact", "Sources")
         assert resource.kind == "ExternalArtifact"
         assert resource.category == "Sources"
+        # Primary attributes
         assert resource.extra_attributes["url"] == "https://example.com/artifact.tar.gz"
-        assert resource.extra_attributes["interval"] == "1h"
-        assert resource.extra_attributes["artifact_revision"] == "ext-rev"
+        # Diagnostic attributes
+        assert resource.diagnostic_attributes["interval"] == "1h"
+        assert resource.diagnostic_attributes["artifact_revision"] == "ext-rev"
 
 
 # --- parse_flux_resource: ResourceSetInputProvider ---
@@ -516,9 +591,8 @@ class TestParseResourceSetInputProvider:
         resource = parse_flux_resource(raw, "ResourceSetInputProvider", "Sources")
         assert resource.kind == "ResourceSetInputProvider"
         assert resource.category == "Sources"
-        assert resource.extra_attributes["resource_ref_kind"] == "ConfigMap"
-        assert resource.extra_attributes["resource_ref_name"] == "my-config"
-        assert resource.extra_attributes["resource_ref_namespace"] == "default"
+        # Primary attributes: flattened source ref
+        assert resource.extra_attributes["source"] == "ConfigMap/default/my-config"
 
 
 # --- Edge cases ---
@@ -567,3 +641,26 @@ class TestEdgeCases:
         raw = _make_raw_resource(conditions=[_make_condition(status="True")])
         resource = parse_flux_resource(raw, "GitRepository")
         assert resource.category == ""
+
+    def test_suspended_overrides_ready(self):
+        """Suspended flag overrides the Ready=True condition status."""
+        raw = _make_raw_resource(
+            spec={"suspend": True},
+            conditions=[_make_condition(status="True")],
+        )
+        resource = parse_flux_resource(raw, "GitRepository", "Sources")
+        assert resource.ready_status == "suspended"
+        assert resource.suspend is True
+
+    def test_reconcile_time_from_ready_condition(self):
+        """reconcile_time should match the Ready condition's lastTransitionTime."""
+        raw = _make_raw_resource(
+            conditions=[
+                _make_condition(
+                    status="True",
+                    last_transition_time="2026-02-08T01:22:37Z",
+                )
+            ]
+        )
+        resource = parse_flux_resource(raw, "GitRepository", "Sources")
+        assert resource.reconcile_time == "2026-02-08T01:22:37Z"
