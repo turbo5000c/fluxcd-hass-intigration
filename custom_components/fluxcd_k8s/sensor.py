@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CATEGORY_SOURCES, DOMAIN, FLUX_RESOURCES, STATE_UNKNOWN
+from .const import DOMAIN, FLUX_RESOURCES, STATE_UNKNOWN
 from .coordinator import FluxCDCoordinator
 from .models import FluxResource
 
@@ -126,15 +126,22 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         # resource type devices, and category (e.g., "entry_id_Sources") for
         # category devices.
         kind = resource.kind
-        category = resource.category or CATEGORY_SOURCES
+        category = resource.category
         resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
+
+        # When category is known, link to the category device; otherwise
+        # fall back to the hub device so entities aren't mis-grouped.
+        if category:
+            via_device = (DOMAIN, f"{entry.entry_id}_{category}")
+        else:
+            via_device = (DOMAIN, entry.entry_id)
 
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"{entry.entry_id}_{kind}")},
             "name": resource_type,
             "manufacturer": "FluxCD",
             "model": f"FluxCD {kind}",
-            "via_device": (DOMAIN, f"{entry.entry_id}_{category}"),
+            "via_device": via_device,
         }
 
     def _find_resource(self) -> FluxResource | None:

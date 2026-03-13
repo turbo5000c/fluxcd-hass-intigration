@@ -27,7 +27,7 @@ CATEGORY_DEPLOYMENTS = "Deployments"
 
 # ---------------------------------------------------------------------------
 # FluxCD CRD definitions
-# Each entry: group, version, plural, kind, category
+# Each entry: group, version, plural, kind, category, resource_type
 # ---------------------------------------------------------------------------
 
 # Sources (source.toolkit.fluxcd.io)

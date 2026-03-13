@@ -235,9 +235,9 @@ Each FluxCD resource becomes a Home Assistant sensor entity. Entities are groupe
 2. **Resource type** (GitRepository, Kustomization, etc.)
 
 Example entity names:
-- `FluxCD GitRepository flux-system/my-repo` (Sources / GitRepository)
-- `FluxCD Kustomization flux-system/my-app` (Deployments / Kustomization)
-- `FluxCD FluxInstance flux-system/flux` (Deployments / FluxInstance)
+- `my-repo - flux-system` (Sources / Git Repositories)
+- `my-app - flux-system` (Deployments / Kustomizations)
+- `flux - flux-system` (Deployments / Flux Instances)
 
 ### Status Normalization
 
