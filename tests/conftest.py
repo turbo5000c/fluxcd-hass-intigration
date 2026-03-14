@@ -1,4 +1,4 @@
-"""Pytest configuration for FluxCD Kubernetes integration tests."""
+"""Pytest configuration for FluxCD integration tests."""
 
 import importlib.util
 import sys

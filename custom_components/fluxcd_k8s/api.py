@@ -44,7 +44,7 @@ class FluxKubernetesClient:
         namespace: str = "",
         label_selector: str = "",
     ) -> None:
-        """Initialize the FluxCD Kubernetes client.
+        """Initialize the FluxCD client.
 
         Args:
             access_mode: Either 'in_cluster' or 'kubeconfig'.

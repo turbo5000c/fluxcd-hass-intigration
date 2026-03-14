@@ -1,4 +1,4 @@
-"""Config flow for FluxCD Kubernetes integration."""
+"""Config flow for FluxCD integration."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ async def validate_input(
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for FluxCD Kubernetes."""
+    """Handle a config flow for FluxCD."""
 
     VERSION = 1
 

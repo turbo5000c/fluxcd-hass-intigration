@@ -1,4 +1,4 @@
-"""Constants for the FluxCD Kubernetes integration."""
+"""Constants for the FluxCD integration."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ ACCESS_MODE_IN_CLUSTER = "in_cluster"
 ACCESS_MODE_KUBECONFIG = "kubeconfig"
 
 # Default values
-DEFAULT_NAME = "FluxCD Kubernetes"
+DEFAULT_NAME = "FluxCD"
 DEFAULT_SCAN_INTERVAL = 60  # seconds
 DEFAULT_NAMESPACE = ""  # empty means all namespaces
 

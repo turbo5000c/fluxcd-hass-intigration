@@ -1,4 +1,4 @@
-"""Tests for FluxCD Kubernetes integration constants."""
+"""Tests for FluxCD integration constants."""
 
 from __future__ import annotations
 

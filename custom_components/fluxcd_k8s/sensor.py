@@ -1,4 +1,4 @@
-"""Sensor platform for FluxCD Kubernetes resources."""
+"""Sensor platform for FluxCD resources."""
 
 from __future__ import annotations
 

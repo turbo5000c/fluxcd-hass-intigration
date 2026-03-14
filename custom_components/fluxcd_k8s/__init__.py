@@ -1,4 +1,4 @@
-"""The FluxCD Kubernetes integration."""
+"""The FluxCD integration."""
 
 from __future__ import annotations
 
@@ -34,13 +34,13 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the FluxCD Kubernetes component."""
+    """Set up the FluxCD component."""
     hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up FluxCD Kubernetes from a config entry."""
+    """Set up FluxCD from a config entry."""
     _LOGGER.debug("Setting up %s integration", DOMAIN)
 
     # Create the Kubernetes API client
