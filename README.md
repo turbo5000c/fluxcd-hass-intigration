@@ -380,6 +380,123 @@ entities:
 
 > **Tip:** Diagnostic sensor entity IDs follow the pattern `sensor.{namespace}_{name}_{attribute}`. For example, the `Artifact Revision` diagnostic sensor for `flux-system/flux-system` becomes `sensor.flux_system_flux_system_artifact_revision`.
 
+### FluxCD Component Health Card
+
+Monitor the health of the core Flux controllers in your cluster. Flux installs controllers such as `source-controller`, `kustomize-controller`, `helm-controller`, and `notification-controller` as Kustomizations in the `flux-system` namespace. These appear as entities in this integration.
+
+The `FluxInstance` entity (if you use the [flux-operator](https://github.com/controlplaneio-fluxcd/flux-operator)) exposes the overall Flux distribution version and last applied revision.
+
+Use a **Markdown card** with Jinja2 templates to render a status table with color-coded icons:
+
+```yaml
+type: markdown
+title: FluxCD Component Health
+content: |
+  ## FluxCD Controllers
+
+  {% set ns = namespace(all_ready=true) %}
+  {% set resources = [
+    ('source-controller',       states('sensor.flux_system_source_controller_status')),
+    ('kustomize-controller',    states('sensor.flux_system_kustomize_controller_status')),
+    ('helm-controller',         states('sensor.flux_system_helm_controller_status')),
+    ('notification-controller', states('sensor.flux_system_notification_controller_status')),
+  ] %}
+  | Controller | Status |
+  |-----------|--------|
+  {% for name, state in resources %}
+  {% if state == 'ready' %}| {{ name }} | ✅ Ready |
+  {% elif state == 'not_ready' %}| {{ name }} | ❌ Error |{% set ns.all_ready = false %}
+  {% elif state == 'progressing' %}| {{ name }} | ⏳ Reconciling |
+  {% elif state == 'suspended' %}| {{ name }} | ⏸ Suspended |
+  {% else %}| {{ name }} | ❓ Unknown |
+  {% endif %}{% endfor %}
+
+  {% if ns.all_ready %}✅ All controllers healthy{% else %}⚠️ One or more controllers need attention{% endif %}
+```
+
+For a card that shows **last reconcile time and error messages** for each controller, combine status and attribute rows in an entities card:
+
+```yaml
+type: entities
+title: FluxCD Controllers
+entities:
+  - entity: sensor.flux_system_source_controller_status
+    name: Source Controller
+  - type: attribute
+    entity: sensor.flux_system_source_controller_status
+    attribute: reconcile_time
+    name: "  Last Reconcile"
+  - type: attribute
+    entity: sensor.flux_system_source_controller_status
+    attribute: message
+    name: "  Message"
+  - type: divider
+  - entity: sensor.flux_system_kustomize_controller_status
+    name: Kustomize Controller
+  - type: attribute
+    entity: sensor.flux_system_kustomize_controller_status
+    attribute: reconcile_time
+    name: "  Last Reconcile"
+  - type: attribute
+    entity: sensor.flux_system_kustomize_controller_status
+    attribute: message
+    name: "  Message"
+  - type: divider
+  - entity: sensor.flux_system_helm_controller_status
+    name: Helm Controller
+  - type: attribute
+    entity: sensor.flux_system_helm_controller_status
+    attribute: reconcile_time
+    name: "  Last Reconcile"
+  - type: attribute
+    entity: sensor.flux_system_helm_controller_status
+    attribute: message
+    name: "  Message"
+  - type: divider
+  - entity: sensor.flux_system_notification_controller_status
+    name: Notification Controller
+  - type: attribute
+    entity: sensor.flux_system_notification_controller_status
+    attribute: reconcile_time
+    name: "  Last Reconcile"
+  - type: attribute
+    entity: sensor.flux_system_notification_controller_status
+    attribute: message
+    name: "  Message"
+```
+
+To also show the overall **FluxInstance** status (Flux Operator distribution version and last applied revision):
+
+```yaml
+type: entities
+title: Flux Operator Instance
+entities:
+  - entity: sensor.flux_system_flux_status
+    name: Flux Instance
+  - type: attribute
+    entity: sensor.flux_system_flux_status
+    attribute: distribution_version
+    name: Distribution Version
+  - entity: sensor.flux_system_flux_last_applied_revision
+    name: Last Applied Revision
+  - type: attribute
+    entity: sensor.flux_system_flux_status
+    attribute: reconcile_time
+    name: Last Reconcile
+  - type: attribute
+    entity: sensor.flux_system_flux_status
+    attribute: message
+    name: Message
+```
+
+> **Note:** Controller Kustomization entity IDs depend on how Flux is installed in your cluster. If Flux was bootstrapped with the default names, the entities will follow the `sensor.flux_system_{controller_name}_status` pattern shown above.
+>
+> To find your actual controller names, run:
+> ```bash
+> kubectl get kustomizations -n flux-system
+> ```
+> Convert each name to a sensor entity ID by replacing hyphens and slashes with underscores and appending `_status`. For example, a Kustomization named `helm-controller` in `flux-system` becomes `sensor.flux_system_helm_controller_status`.
+
 ## Requirements
 
 - Home Assistant 2024.9.1+
