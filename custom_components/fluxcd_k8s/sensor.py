@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -141,29 +140,9 @@ def _async_check_new_entities(
     async_add_entities: AddEntitiesCallback,
     known_ids: set[str],
 ) -> None:
-    """Check for new FluxCD resources and add entities for them.
-
-    Also ensures that the kind device exists for any newly discovered resource
-    kind, in case that kind had no resources during the initial setup.
-    """
+    """Check for new FluxCD resources and add entities for them."""
     if not coordinator.data:
         return
-
-    # Ensure kind devices exist for any kind that now has resources.
-    # This covers the case where a resource kind has no data at setup time
-    # (so its kind device was skipped) but resources appear later.
-    device_reg = dr.async_get(coordinator.hass)
-    for kind, resources in coordinator.data.items():
-        if not resources:
-            continue
-        resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
-        device_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, f"{entry.entry_id}_{kind}")},
-            name=resource_type,
-            manufacturer="FluxCD",
-            model=f"FluxCD {kind}",
-        )
 
     new_sensors: list[SensorEntity] = []
     for resources in coordinator.data.values():
@@ -191,12 +170,15 @@ def _build_unique_id(entry_id: str, resource: FluxResource) -> str:
 def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
     """Build device_info for a single FluxCD resource instance.
 
-    Each resource gets its own HA device (e.g. "traefik/traefik") that is
-    nested under the shared kind device (e.g. "Helm Repositories"), which in
-    turn is nested under the category device (Sources / Deployments).
+    Each resource is its own top-level HA device (e.g. "traefik/traefik").
+    There are no intermediate kind or category devices — resources appear
+    directly in the integration's device list so users can navigate straight
+    to a resource without clicking through a hierarchy.
 
-    The full hierarchy registered in __init__.py is:
-        Hub → Category (Sources/Deployments) → Kind (Helm Repositories) → Resource
+    The model field (e.g. "Helm Repositories") shows the resource kind so
+    that same-named resources of different kinds (e.g. code-server/code-server
+    as a GitRepository *and* as a Kustomization) remain distinguishable in the
+    device list.
 
     Resource identifiers include namespace and name so that each Kubernetes
     resource maps to a stable, unique device.  If a resource is renamed in
@@ -213,9 +195,8 @@ def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
         "name": f"{resource.namespace}/{resource.name}",
         "manufacturer": "FluxCD",
         "model": resource_type,
-        # Kind devices (e.g. "Helm Repositories") are registered in __init__.py;
-        # resource devices link to them to maintain the full hierarchy.
-        "via_device": (DOMAIN, f"{entry_id}_{kind}"),
+        # No via_device: resource devices are top-level navigation nodes so
+        # clicking one goes directly to that resource's entity page.
     }
 
 

@@ -76,50 +76,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # so orphaned entries accumulate across upgrades unless we explicitly
     # delete them here.
     #
-    # Removed by older code revisions:
+    # Removed by this and older code revisions:
     #   • Hub device          identifiers={(DOMAIN, entry.entry_id)}
     #   • Category devices    identifiers={(DOMAIN, f"{entry_id}_Sources")}
     #                         identifiers={(DOMAIN, f"{entry_id}_Deployments")}
-    #   • Kind devices for kinds that currently have no resources
+    #   • Kind devices        identifiers={(DOMAIN, f"{entry_id}_{kind}")}
+    #     (all kinds — previously used as navigation nodes, now removed so
+    #      individual resource devices appear at the top level)
     # ------------------------------------------------------------------
     _stale_identifiers: list[frozenset] = [
         frozenset({(DOMAIN, entry.entry_id)}),               # hub
         frozenset({(DOMAIN, f"{entry.entry_id}_Sources")}),  # category
         frozenset({(DOMAIN, f"{entry.entry_id}_Deployments")}),
     ]
+    # Also remove all kind devices (current and future kinds)
+    for flux_crd in FLUX_RESOURCES:
+        _stale_identifiers.append(
+            frozenset({(DOMAIN, f"{entry.entry_id}_{flux_crd['kind']}")})
+        )
     for _idf in _stale_identifiers:
         _dev = device_reg.async_get_device(identifiers=_idf)
         if _dev is not None:
             device_reg.async_remove_device(_dev.id)
-
-    # Build the set of kinds that currently have at least one resource so
-    # we can both skip registering empty kinds and remove any that were
-    # previously registered but are now empty.
-    populated_kinds: set[str] = {
-        kind
-        for kind, resources in (coordinator.data or {}).items()
-        if resources
-    }
-    for flux_crd in FLUX_RESOURCES:
-        kind = flux_crd["kind"]
-        kind_identifiers = frozenset({(DOMAIN, f"{entry.entry_id}_{kind}")})
-        if kind not in populated_kinds:
-            # Remove the kind device if it exists but has no resources.
-            _dev = device_reg.async_get_device(identifiers=kind_identifiers)
-            if _dev is not None:
-                device_reg.async_remove_device(_dev.id)
-            continue
-        resource_type = flux_crd["resource_type"]
-        device_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers=kind_identifiers,
-            name=resource_type,
-            manufacturer="FluxCD",
-            model=f"FluxCD {kind}",
-            # No via_device: kind devices appear at the top level so users
-            # can navigate directly into Git Repositories / Helm Repositories
-            # etc. without an intermediate hub or category node.
-        )
 
     # Set up all platforms for this integration
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
