@@ -37,6 +37,7 @@ _KIND_ICONS: dict[str, str] = {
     "ArtifactGenerator": "mdi:file-code-outline",
     "ExternalArtifact": "mdi:download-box-outline",
     "ResourceSetInputProvider": "mdi:database-import-outline",
+    "ControllerComponent": "mdi:cog-outline",
 }
 
 # Diagnostic sensors created for every FluxCD resource kind.
@@ -91,6 +92,11 @@ _KIND_EXTRA_DIAGNOSTIC_SENSORS: dict[str, list[tuple[str, str, str]]] = {
         ("artifact_revision", "Artifact Revision", "mdi:tag-outline"),
     ],
     "ResourceSetInputProvider": [],
+    "ControllerComponent": [
+        ("desired_replicas", "Desired Replicas", "mdi:counter"),
+        ("ready_replicas", "Ready Replicas", "mdi:counter"),
+        ("available_replicas", "Available Replicas", "mdi:counter"),
+    ],
 }
 
 
@@ -187,6 +193,8 @@ def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
     """
     kind = resource.kind
     resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
+    if kind == "ControllerComponent":
+        resource_type = "Flux Controller"
 
     return {
         "identifiers": {
@@ -366,6 +374,10 @@ class FluxCDDiagnosticSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity)
             return _get_condition_flag(resource.conditions, "Ready")
         if self._attr_key == "artifact_in_storage":
             return _get_condition_flag(resource.conditions, "ArtifactInStorage")
+
+        # Controller replica counts are stored in extra_attributes
+        if self._attr_key in ("desired_replicas", "ready_replicas", "available_replicas"):
+            return resource.extra_attributes.get(self._attr_key)
 
         # All other diagnostic attributes come from the diagnostic_attributes dict
         return resource.diagnostic_attributes.get(self._attr_key)

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .const import (
+    CATEGORY_CONTROLLERS,
+    STATE_DEGRADED,
     STATE_NOT_READY,
     STATE_PROGRESSING,
     STATE_READY,
@@ -481,3 +483,125 @@ _KIND_ATTR_PARSERS: dict[
     "ExternalArtifact": _parse_external_artifact_attrs,
     "ResourceSetInputProvider": _parse_resource_set_input_provider_attrs,
 }
+
+
+# ---------------------------------------------------------------------------
+# FluxCD controller component parsing
+# ---------------------------------------------------------------------------
+
+
+def _determine_controller_status(
+    desired: int,
+    ready: int,
+    available: int,
+    conditions: list[dict[str, Any]],
+) -> str:
+    """Derive a controller ready status from Deployment replica counts and conditions.
+
+    Status mapping:
+    - progressing: a Progressing condition is active (rolling update in progress)
+    - ready: all desired replicas are available and ready
+    - degraded: some (but not all) replicas are available
+    - not_ready: no replicas are available
+    - unknown: replica counts are unavailable
+    """
+    # Check for an active Progressing condition first
+    for cond in conditions:
+        if cond.get("type") == "Progressing" and cond.get("status") == "True":
+            reason = cond.get("reason", "")
+            # "NewReplicaSetAvailable" means the rollout finished — not progressing
+            if reason != "NewReplicaSetAvailable":
+                return STATE_PROGRESSING
+
+    if desired <= 0:
+        return STATE_UNKNOWN
+
+    if available >= desired and ready >= desired:
+        return STATE_READY
+
+    if available > 0:
+        return STATE_DEGRADED
+
+    return STATE_NOT_READY
+
+
+def parse_controller_deployment(raw: dict[str, Any]) -> FluxResource:
+    """Parse a raw Kubernetes Deployment object into a FluxResource.
+
+    Converts the Deployment's replica counts and conditions into the standard
+    FluxResource model so that controller components can be handled by the
+    same sensor infrastructure as CRD resources.
+    """
+    metadata = raw.get("metadata", {})
+    spec = raw.get("spec", {})
+    status = raw.get("status", {})
+
+    name = metadata.get("name", "")
+    namespace = metadata.get("namespace", "")
+
+    desired_raw = spec.get("replicas")
+    desired: int = desired_raw if desired_raw is not None else 1
+    ready_replicas: int = status.get("readyReplicas") or 0
+    available_replicas: int = status.get("availableReplicas") or 0
+    observed_generation: int | None = status.get("observedGeneration")
+
+    raw_conditions: list[dict[str, Any]] = status.get("conditions", [])
+
+    ready_status = _determine_controller_status(
+        desired, ready_replicas, available_replicas, raw_conditions
+    )
+
+    # Convert Deployment conditions to FluxConditions for a consistent interface
+    flux_conditions: list[FluxCondition] = []
+    last_transition_time = ""
+    message = ""
+    reason = ""
+    for cond in raw_conditions:
+        flux_conditions.append(
+            FluxCondition(
+                type=cond.get("type", ""),
+                status=cond.get("status", ""),
+                reason=cond.get("reason", ""),
+                message=cond.get("message", ""),
+                last_transition_time=cond.get("lastTransitionTime", ""),
+            )
+        )
+        # Use the Available condition as the primary message/reason source
+        if cond.get("type") == "Available":
+            message = cond.get("message", "")
+            reason = cond.get("reason", "")
+            last_transition_time = cond.get("lastTransitionTime", "")
+
+    # Extract image version tag from the first container image (e.g. v2.3.0)
+    containers: list[dict[str, Any]] = (
+        spec.get("template", {}).get("spec", {}).get("containers", [])
+    )
+    image_tag = ""
+    if containers:
+        image: str = containers[0].get("image", "")
+        if ":" in image:
+            image_tag = image.rsplit(":", 1)[-1]
+
+    extra_attributes: dict[str, Any] = {
+        "desired_replicas": desired,
+        "ready_replicas": ready_replicas,
+        "available_replicas": available_replicas,
+    }
+    if image_tag:
+        extra_attributes["version"] = image_tag
+
+    return FluxResource(
+        kind="ControllerComponent",
+        name=name,
+        namespace=namespace,
+        category=CATEGORY_CONTROLLERS,
+        ready_status=ready_status,
+        message=message,
+        reason=reason,
+        reconcile_time=last_transition_time,
+        suspend=False,
+        observed_generation=observed_generation,
+        conditions=flux_conditions,
+        extra_attributes=extra_attributes,
+        diagnostic_attributes={},
+    )
