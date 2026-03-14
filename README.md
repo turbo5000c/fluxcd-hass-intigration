@@ -391,27 +391,29 @@ Use a **Markdown card** with Jinja2 templates to render a status table with colo
 ```yaml
 type: markdown
 title: FluxCD Component Health
-content: |
-  ## FluxCD Controllers
-
-  {% set ns = namespace(all_ready=true) %}
-  {% set resources = [
+content: >
+  ## FluxCD Controllers {% set ns = namespace(all_ready=true) %} {% set
+  resources = [
     ('source-controller',       states('sensor.flux_system_source_controller_status')),
     ('kustomize-controller',    states('sensor.flux_system_kustomize_controller_status')),
     ('helm-controller',         states('sensor.flux_system_helm_controller_status')),
     ('notification-controller', states('sensor.flux_system_notification_controller_status')),
   ] %}
-  | Controller | Status |
-  |-----------|--------|
-  {% for name, state in resources %}
-  {% if state == 'ready' %}| {{ name }} | ✅ Ready |
-  {% elif state == 'not_ready' %}| {{ name }} | ❌ Error |{% set ns.all_ready = false %}
-  {% elif state == 'progressing' %}| {{ name }} | ⏳ Reconciling |
-  {% elif state == 'suspended' %}| {{ name }} | ⏸ Suspended |
-  {% else %}| {{ name }} | ❓ Unknown |
-  {% endif %}{% endfor %}
 
-  {% if ns.all_ready %}✅ All controllers healthy{% else %}⚠️ One or more controllers need attention{% endif %}
+  | Controller | Status |
+
+  |-----------|--------|
+
+  {% for name, state in resources %}{% if state == 'ready' %} | {{ name }} | ✅
+  Ready |
+
+  {% elif state == 'not_ready' %}| {{ name }} | ❌ Error |{% set ns.all_ready =
+  false %} {% elif state == 'progressing' %}| {{ name }} | ⏳ Reconciling | {%
+  elif state == 'suspended' %}| {{ name }} | ⏸ Suspended | {% else %}| {{ name
+  }} | ❓ Unknown | {% endif %}{% endfor %}
+
+  {% if ns.all_ready %}✅ All controllers healthy{% else %}⚠️ One or more
+  controllers need attention{% endif %}
 ```
 
 For a card that shows **last reconcile time and error messages** for each controller, combine status and attribute rows in an entities card:
