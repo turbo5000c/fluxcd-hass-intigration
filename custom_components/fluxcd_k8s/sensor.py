@@ -298,7 +298,8 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         # Add kind-specific primary attributes (source, chart, version, summary, …)
         attrs.update(resource.extra_attributes)
 
-        return attrs
+        # Remove empty-string and None values to avoid UI noise
+        return {k: v for k, v in attrs.items() if v is not None and v != ""}
 
 
 class FluxCDDiagnosticSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):

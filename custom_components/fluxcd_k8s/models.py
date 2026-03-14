@@ -101,12 +101,12 @@ def determine_ready_status(conditions: list[FluxCondition]) -> str:
     return STATE_UNKNOWN
 
 
-def _get_condition_flag(conditions: list[FluxCondition], cond_type: str) -> bool:
-    """Return True when a named condition has status 'True'."""
+def _get_condition_flag(conditions: list[FluxCondition], cond_type: str) -> bool | None:
+    """Return True/False when a named condition exists, or None when absent."""
     for cond in conditions:
         if cond.type == cond_type:
             return cond.status == "True"
-    return False
+    return None
 
 
 def _format_source_ref(kind: str, name: str, namespace: str = "") -> str:
@@ -282,10 +282,11 @@ def _parse_helm_release_attrs(
     source_ref = chart_spec.get("sourceRef", {})
     source_kind = source_ref.get("kind", "")
     source_name = source_ref.get("name", "")
+    source_namespace = source_ref.get("namespace", "")
     primary: dict[str, Any] = {
         "chart_name": chart_spec.get("chart", ""),
         "chart_version": chart_spec.get("version", ""),
-        "source": _format_source_ref(source_kind, source_name) if source_kind else "",
+        "source": _format_source_ref(source_kind, source_name, source_namespace) if source_kind else "",
     }
     diagnostic: dict[str, Any] = {
         "interval": spec.get("interval", ""),

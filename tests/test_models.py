@@ -310,6 +310,57 @@ class TestParseHelmRelease:
         assert resource.diagnostic_attributes["last_applied_revision"] == "1.0.0"
         assert resource.diagnostic_attributes["last_release_revision"] == 3
 
+    def test_source_ref_with_namespace(self):
+        raw = _make_raw_resource(
+            kind="HelmRelease",
+            name="my-release",
+            namespace="default",
+            conditions=[_make_condition(status="True")],
+            spec={
+                "interval": "5m",
+                "chart": {
+                    "spec": {
+                        "chart": "nginx",
+                        "version": "1.0.0",
+                        "sourceRef": {
+                            "kind": "HelmRepository",
+                            "name": "bitnami",
+                            "namespace": "flux-system",
+                        },
+                    }
+                },
+            },
+            status_extra={},
+        )
+        resource = parse_flux_resource(raw, "HelmRelease", "Deployments")
+        # namespace present → Kind/namespace/name
+        assert resource.extra_attributes["source"] == "HelmRepository/flux-system/bitnami"
+
+    def test_source_ref_without_namespace(self):
+        raw = _make_raw_resource(
+            kind="HelmRelease",
+            name="my-release",
+            namespace="default",
+            conditions=[_make_condition(status="True")],
+            spec={
+                "interval": "5m",
+                "chart": {
+                    "spec": {
+                        "chart": "nginx",
+                        "version": "1.0.0",
+                        "sourceRef": {
+                            "kind": "HelmRepository",
+                            "name": "bitnami",
+                        },
+                    }
+                },
+            },
+            status_extra={},
+        )
+        resource = parse_flux_resource(raw, "HelmRelease", "Deployments")
+        # namespace absent → Kind/name
+        assert resource.extra_attributes["source"] == "HelmRepository/bitnami"
+
 
 # --- parse_flux_resource: HelmRepository ---
 
