@@ -165,4 +165,6 @@ FLUX_RESOURCES = FLUX_SOURCES + FLUX_DEPLOYMENTS
 # Sensor states
 STATE_READY = "ready"
 STATE_NOT_READY = "not_ready"
+STATE_PROGRESSING = "progressing"
+STATE_SUSPENDED = "suspended"
 STATE_UNKNOWN = "unknown"

@@ -13,8 +13,6 @@ from homeassistant.helpers import device_registry as dr
 
 from .api import FluxKubernetesClient
 from .const import (
-    CATEGORY_DEPLOYMENTS,
-    CATEGORY_SOURCES,
     CONF_ACCESS_MODE,
     CONF_KUBECONFIG_PATH,
     CONF_LABEL_SELECTOR,
@@ -70,44 +68,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store the coordinator in hass.data for access by platforms
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Register hub, category, and resource type devices in the device
-    # registry so that sensor entities are grouped hierarchically:
-    # FluxCD (hub) → Sources / Deployments → Git Repositories / Kustomizations / etc.
     device_reg = dr.async_get(hass)
 
-    # Hub device - top-level parent for the integration
-    device_reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.title,
-        manufacturer="FluxCD",
-        model="Kubernetes GitOps",
-    )
-
-    # Category devices - one per category, linked to the hub
-    for category in (CATEGORY_SOURCES, CATEGORY_DEPLOYMENTS):
-        device_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, f"{entry.entry_id}_{category}")},
-            name=category,
-            manufacturer="FluxCD",
-            model=f"FluxCD {category}",
-            via_device=(DOMAIN, entry.entry_id),
-        )
-
-    # Resource type devices - one per CRD kind, linked to its category
+    # ------------------------------------------------------------------
+    # Cleanup: remove stale devices left by older versions of this
+    # integration.  HA does not remove devices automatically on reload,
+    # so orphaned entries accumulate across upgrades unless we explicitly
+    # delete them here.
+    #
+    # Removed by this and older code revisions:
+    #   • Hub device          identifiers={(DOMAIN, entry.entry_id)}
+    #   • Category devices    identifiers={(DOMAIN, f"{entry_id}_Sources")}
+    #                         identifiers={(DOMAIN, f"{entry_id}_Deployments")}
+    #   • Kind devices        identifiers={(DOMAIN, f"{entry_id}_{kind}")}
+    #     (all kinds — previously used as navigation nodes, now removed so
+    #      individual resource devices appear at the top level)
+    # ------------------------------------------------------------------
+    _stale_identifiers: list[frozenset] = [
+        frozenset({(DOMAIN, entry.entry_id)}),               # hub
+        frozenset({(DOMAIN, f"{entry.entry_id}_Sources")}),  # category
+        frozenset({(DOMAIN, f"{entry.entry_id}_Deployments")}),
+    ]
+    # Also remove all kind devices (current and future kinds)
     for flux_crd in FLUX_RESOURCES:
-        kind = flux_crd["kind"]
-        category = flux_crd["category"]
-        resource_type = flux_crd["resource_type"]
-        device_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, f"{entry.entry_id}_{kind}")},
-            name=resource_type,
-            manufacturer="FluxCD",
-            model=f"FluxCD {kind}",
-            via_device=(DOMAIN, f"{entry.entry_id}_{category}"),
+        _stale_identifiers.append(
+            frozenset({(DOMAIN, f"{entry.entry_id}_{flux_crd['kind']}")})
         )
+    for _idf in _stale_identifiers:
+        _dev = device_reg.async_get_device(identifiers=_idf)
+        if _dev is not None:
+            device_reg.async_remove_device(_dev.id)
 
     # Set up all platforms for this integration
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
