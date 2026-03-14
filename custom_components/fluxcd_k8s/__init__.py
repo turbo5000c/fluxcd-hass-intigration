@@ -13,8 +13,6 @@ from homeassistant.helpers import device_registry as dr
 
 from .api import FluxKubernetesClient
 from .const import (
-    CATEGORY_DEPLOYMENTS,
-    CATEGORY_SOURCES,
     CONF_ACCESS_MODE,
     CONF_KUBECONFIG_PATH,
     CONF_LABEL_SELECTOR,
@@ -70,35 +68,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store the coordinator in hass.data for access by platforms
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Register hub, category, and resource type devices in the device
-    # registry so that sensor entities are grouped hierarchically:
-    # FluxCD (hub) → Sources / Deployments → Git Repositories / Kustomizations / etc.
+    # Register kind devices in the device registry so that per-resource
+    # sensor entities are grouped hierarchically.  Only kinds that actually
+    # have resources are registered; empty kinds are skipped so they don't
+    # add noise to the integration's device list.
+    #
+    # Resulting layout in Settings → Devices & Services:
+    #   Git Repositories          ← kind device (top-level)
+    #     └── flux-system/flux-system   ← resource device
+    #     └── code-server/code-server
+    #   Helm Repositories
+    #     └── traefik/traefik
+    #     └── bitnami/bitnami
+    #   ...
     device_reg = dr.async_get(hass)
-
-    # Hub device - top-level parent for the integration
-    device_reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.title,
-        manufacturer="FluxCD",
-        model="Kubernetes GitOps",
-    )
-
-    # Category devices - one per category, linked to the hub
-    for category in (CATEGORY_SOURCES, CATEGORY_DEPLOYMENTS):
-        device_reg.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, f"{entry.entry_id}_{category}")},
-            name=category,
-            manufacturer="FluxCD",
-            model=f"FluxCD {category}",
-            via_device=(DOMAIN, entry.entry_id),
-        )
-
-    # Resource type devices - one per CRD kind, linked to its category
+    populated_kinds: set[str] = {
+        kind
+        for kind, resources in (coordinator.data or {}).items()
+        if resources
+    }
     for flux_crd in FLUX_RESOURCES:
         kind = flux_crd["kind"]
-        category = flux_crd["category"]
+        if kind not in populated_kinds:
+            continue
         resource_type = flux_crd["resource_type"]
         device_reg.async_get_or_create(
             config_entry_id=entry.entry_id,
@@ -106,7 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             name=resource_type,
             manufacturer="FluxCD",
             model=f"FluxCD {kind}",
-            via_device=(DOMAIN, f"{entry.entry_id}_{category}"),
+            # No via_device: kind devices appear at the top level so users
+            # can navigate directly into Git Repositories / Helm Repositories
+            # etc. without an intermediate hub or category node.
         )
 
     # Set up all platforms for this integration

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -140,9 +141,29 @@ def _async_check_new_entities(
     async_add_entities: AddEntitiesCallback,
     known_ids: set[str],
 ) -> None:
-    """Check for new FluxCD resources and add entities for them."""
+    """Check for new FluxCD resources and add entities for them.
+
+    Also ensures that the kind device exists for any newly discovered resource
+    kind, in case that kind had no resources during the initial setup.
+    """
     if not coordinator.data:
         return
+
+    # Ensure kind devices exist for any kind that now has resources.
+    # This covers the case where a resource kind has no data at setup time
+    # (so its kind device was skipped) but resources appear later.
+    device_reg = dr.async_get(coordinator.hass)
+    for kind, resources in coordinator.data.items():
+        if not resources:
+            continue
+        resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
+        device_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, f"{entry.entry_id}_{kind}")},
+            name=resource_type,
+            manufacturer="FluxCD",
+            model=f"FluxCD {kind}",
+        )
 
     new_sensors: list[SensorEntity] = []
     for resources in coordinator.data.values():
