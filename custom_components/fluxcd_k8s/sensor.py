@@ -168,22 +168,33 @@ def _build_unique_id(entry_id: str, resource: FluxResource) -> str:
 
 
 def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
-    """Build shared device_info for all sensors of a FluxCD resource."""
+    """Build device_info for a single FluxCD resource instance.
+
+    Each resource gets its own HA device (e.g. "traefik/traefik") that is
+    nested under the shared kind device (e.g. "Helm Repositories"), which in
+    turn is nested under the category device (Sources / Deployments).
+
+    The full hierarchy registered in __init__.py is:
+        Hub → Category (Sources/Deployments) → Kind (Helm Repositories) → Resource
+
+    Resource identifiers include namespace and name so that each Kubernetes
+    resource maps to a stable, unique device.  If a resource is renamed in
+    the cluster, HA will treat it as a new device (the old one becomes
+    orphaned), which is the expected behaviour for k8s-backed integrations.
+    """
     kind = resource.kind
-    category = resource.category
     resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
 
-    if category:
-        via_device = (DOMAIN, f"{entry_id}_{category}")
-    else:
-        via_device = (DOMAIN, entry_id)
-
     return {
-        "identifiers": {(DOMAIN, f"{entry_id}_{kind}")},
-        "name": resource_type,
+        "identifiers": {
+            (DOMAIN, f"{entry_id}_{kind}_{resource.namespace}_{resource.name}")
+        },
+        "name": f"{resource.namespace}/{resource.name}",
         "manufacturer": "FluxCD",
-        "model": f"FluxCD {kind}",
-        "via_device": via_device,
+        "model": resource_type,
+        # Kind devices (e.g. "Helm Repositories") are registered in __init__.py;
+        # resource devices link to them to maintain the full hierarchy.
+        "via_device": (DOMAIN, f"{entry_id}_{kind}"),
     }
 
 
@@ -209,7 +220,13 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
     per-resource fields at a glance.  Detailed diagnostic data is split out
     into separate FluxCDDiagnosticSensor entities so that it appears in the
     "Diagnostic" section of the HA device page.
+
+    Because has_entity_name is True, HA automatically prefixes this entity
+    with the device name ("traefik/traefik") in global views while showing
+    just "Status" on the device page — matching the Portainer-style layout.
     """
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -228,7 +245,7 @@ class FluxCDResourceSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity):
         self._resource_namespace = resource.namespace
 
         self._attr_unique_id = _build_unique_id(entry.entry_id, resource)
-        self._attr_name = f"{resource.namespace}/{resource.name}"
+        self._attr_name = "Status"
         self._attr_icon = _KIND_ICONS.get(resource.kind, "mdi:kubernetes")
         self._attr_device_info = _build_device_info(entry.entry_id, resource)
 
@@ -287,9 +304,14 @@ class FluxCDDiagnosticSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity)
 
     These sensors appear under the "Diagnostic" section of the HA device page,
     keeping the primary sensor uncluttered while still surfacing useful data.
+
+    Because has_entity_name is True, HA prefixes the entity with the device
+    name in global views (e.g. "traefik/traefik Ready Condition") while
+    showing just "Ready Condition" on the device page.
     """
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -310,7 +332,7 @@ class FluxCDDiagnosticSensor(CoordinatorEntity[FluxCDCoordinator], SensorEntity)
         self._attr_key = attr_key
 
         self._attr_unique_id = f"{resource_unique_id}_{attr_key}"
-        self._attr_name = f"{resource.namespace}/{resource.name} - {display_name}"
+        self._attr_name = display_name
         self._attr_icon = icon
         self._attr_device_info = _build_device_info(entry.entry_id, resource)
 
