@@ -1,4 +1,4 @@
-"""Tests for FluxCD Kubernetes integration data models and parsing helpers."""
+"""Tests for FluxCD integration data models and parsing helpers."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Data update coordinator for FluxCD Kubernetes resources."""
+"""Data update coordinator for FluxCD resources."""
 
 from __future__ import annotations
 

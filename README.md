@@ -1,4 +1,4 @@
-# FluxCD Kubernetes Integration for Home Assistant
+# FluxCD Integration for Home Assistant
 
 A custom Home Assistant integration that monitors **FluxCD resources in Kubernetes** using **kubernetes-asyncio**. It exposes FluxCD resource status as Home Assistant sensor entities, grouped by **category** (Sources / Deployments) and **resource type**.
 
@@ -145,7 +145,7 @@ Each FluxCD resource is represented as a sensor entity with one of these states:
 ### HACS (Recommended)
 
 1. Add this repository as a custom repository in HACS
-2. Install the "FluxCD Kubernetes" integration
+2. Install the "FluxCD" integration
 3. Restart Home Assistant
 
 ### Manual Installation
@@ -160,7 +160,7 @@ Each FluxCD resource is represented as a sensor entity with one of these states:
 
 1. Go to **Settings → Devices & Services**
 2. Click **+ ADD INTEGRATION**
-3. Search for **FluxCD Kubernetes**
+3. Search for **FluxCD**
 4. Configure the following:
    - **Access Mode**: Select `In-Cluster` if Home Assistant runs inside Kubernetes, or `Kubeconfig File` for external access
    - **Kubeconfig Path**: Path to your kubeconfig file (only needed for Kubeconfig mode; leave empty for the default `~/.kube/config`)

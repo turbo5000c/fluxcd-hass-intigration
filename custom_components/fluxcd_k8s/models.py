@@ -1,4 +1,4 @@
-"""Data models for FluxCD Kubernetes resources."""
+"""Data models for FluxCD resources."""
 
 from __future__ import annotations
 

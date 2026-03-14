@@ -1,6 +1,6 @@
 {
   "domain": "fluxcd_k8s",
-  "name": "FluxCD Kubernetes",
+  "name": "FluxCD",
   "codeowners": ["@turbo5000c"],
   "config_flow": true,
   "documentation": "https://github.com/turbo5000c/fluxcd-hass-intigration",
