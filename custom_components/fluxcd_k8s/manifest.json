@@ -7,7 +7,7 @@
   "issue_tracker": "https://github.com/turbo5000c/fluxcd-hass-intigration/issues",
   "integration_type": "service",
   "iot_class": "local_polling",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "dependencies": [],
   "requirements": ["kubernetes-asyncio==35.0.1"]
 }
