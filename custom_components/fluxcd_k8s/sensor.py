@@ -169,27 +169,37 @@ def _async_check_new_entities(
 
 
 def _build_unique_id(entry_id: str, resource: FluxResource) -> str:
-    """Build a unique ID for a FluxCD resource sensor."""
-    return f"{entry_id}_{resource.kind}_{resource.namespace}_{resource.name}"
+    """Build a unique ID for a FluxCD resource sensor.
+
+    The ID encodes the config-entry, resource kind, namespace and name so
+    that two resources that share the same namespace/name but have different
+    kinds (e.g. a HelmRelease *and* a HelmRepository both called
+    "traefik/traefik") always produce distinct unique IDs and are therefore
+    registered as separate entities in Home Assistant.
+    """
+    return f"{DOMAIN}_{entry_id}_{resource.kind}_{resource.namespace}_{resource.name}"
 
 
 def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
     """Build device_info for a single FluxCD resource instance.
 
-    Each resource is its own top-level HA device (e.g. "traefik/traefik").
-    There are no intermediate kind or category devices — resources appear
-    directly in the integration's device list so users can navigate straight
-    to a resource without clicking through a hierarchy.
+    Each resource is its own top-level HA device.  There are no intermediate
+    kind or category devices — resources appear directly in the integration's
+    device list so users can navigate straight to a resource.
 
-    The model field (e.g. "Helm Repositories") shows the resource kind so
-    that same-named resources of different kinds (e.g. code-server/code-server
-    as a GitRepository *and* as a Kustomization) remain distinguishable in the
-    device list.
+    The device name includes both the namespace/name *and* the resource kind
+    (e.g. "traefik/traefik (Helm Release)").  This is important because it is
+    common for multiple FluxCD resource types to share the same namespace and
+    name (e.g. a HelmRelease *and* a HelmRepository both called
+    "traefik/traefik").  Without the kind suffix those two devices would have
+    identical display names in the HA UI, causing their entities to appear as
+    duplicates.
 
-    Resource identifiers include namespace and name so that each Kubernetes
-    resource maps to a stable, unique device.  If a resource is renamed in
-    the cluster, HA will treat it as a new device (the old one becomes
-    orphaned), which is the expected behaviour for k8s-backed integrations.
+    Resource identifiers include kind, namespace and name so that each
+    Kubernetes resource maps to a stable, unique device.  If a resource is
+    renamed in the cluster HA will treat it as a new device (the old one
+    becomes orphaned), which is the expected behaviour for k8s-backed
+    integrations.
     """
     kind = resource.kind
     resource_type = _KIND_TO_RESOURCE_TYPE.get(kind, kind)
@@ -200,7 +210,11 @@ def _build_device_info(entry_id: str, resource: FluxResource) -> dict[str, Any]:
         "identifiers": {
             (DOMAIN, f"{entry_id}_{kind}_{resource.namespace}_{resource.name}")
         },
-        "name": f"{resource.namespace}/{resource.name}",
+        # Include the resource kind in the name so that two resources sharing
+        # the same namespace/name but of different kinds (e.g. a HelmRelease
+        # *and* a HelmRepository both named "traefik/traefik") appear as
+        # clearly distinct devices instead of merging into one in the HA UI.
+        "name": f"{resource.namespace}/{resource.name} ({resource_type})",
         "manufacturer": "FluxCD",
         "model": resource_type,
         # No via_device: resource devices are top-level navigation nodes so
