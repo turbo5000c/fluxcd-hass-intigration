@@ -9,6 +9,7 @@ from fluxcd_k8s.models import (
     determine_ready_status,
     get_ready_condition,
     parse_conditions,
+    parse_controller_deployment,
     parse_flux_resource,
 )
 
@@ -715,3 +716,178 @@ class TestEdgeCases:
         )
         resource = parse_flux_resource(raw, "GitRepository", "Sources")
         assert resource.reconcile_time == "2026-02-08T01:22:37Z"
+
+
+# ---------------------------------------------------------------------------
+# FluxCD controller component parsing
+# ---------------------------------------------------------------------------
+
+
+def _make_deployment(
+    name: str = "source-controller",
+    namespace: str = "flux-system",
+    desired_replicas: int = 1,
+    ready_replicas: int | None = 1,
+    available_replicas: int | None = 1,
+    observed_generation: int | None = 3,
+    conditions: list[dict] | None = None,
+    image: str = "ghcr.io/fluxcd/source-controller:v1.4.1",
+) -> dict:
+    """Build a minimal raw Kubernetes Deployment dict for tests."""
+    status: dict = {"observedGeneration": observed_generation}
+    if ready_replicas is not None:
+        status["readyReplicas"] = ready_replicas
+    if available_replicas is not None:
+        status["availableReplicas"] = available_replicas
+    if conditions is not None:
+        status["conditions"] = conditions
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {
+            "replicas": desired_replicas,
+            "template": {
+                "spec": {
+                    "containers": [{"name": "manager", "image": image}]
+                }
+            },
+        },
+        "status": status,
+    }
+
+
+class TestParseControllerDeployment:
+    def test_ready_controller(self):
+        raw = _make_deployment(
+            conditions=[
+                {
+                    "type": "Available",
+                    "status": "True",
+                    "reason": "MinimumReplicasAvailable",
+                    "message": "Deployment has minimum availability.",
+                    "lastTransitionTime": "2026-03-01T10:00:00Z",
+                },
+                {
+                    "type": "Progressing",
+                    "status": "True",
+                    "reason": "NewReplicaSetAvailable",
+                    "message": "Deployment rolled out.",
+                    "lastTransitionTime": "2026-03-01T10:00:00Z",
+                },
+            ]
+        )
+        resource = parse_controller_deployment(raw)
+
+        assert resource.kind == "ControllerComponent"
+        assert resource.name == "source-controller"
+        assert resource.namespace == "flux-system"
+        assert resource.category == "Controllers"
+        assert resource.ready_status == "ready"
+        assert resource.suspend is False
+        assert resource.observed_generation == 3
+        assert resource.extra_attributes["desired_replicas"] == 1
+        assert resource.extra_attributes["ready_replicas"] == 1
+        assert resource.extra_attributes["available_replicas"] == 1
+        assert resource.extra_attributes["version"] == "v1.4.1"
+
+    def test_version_extracted_from_image(self):
+        raw = _make_deployment(image="ghcr.io/fluxcd/helm-controller:v0.37.0")
+        resource = parse_controller_deployment(raw)
+        assert resource.extra_attributes["version"] == "v0.37.0"
+
+    def test_no_version_when_no_tag(self):
+        raw = _make_deployment(image="ghcr.io/fluxcd/source-controller")
+        resource = parse_controller_deployment(raw)
+        assert "version" not in resource.extra_attributes
+
+    def test_degraded_when_some_replicas_missing(self):
+        raw = _make_deployment(
+            desired_replicas=3,
+            ready_replicas=1,
+            available_replicas=1,
+        )
+        resource = parse_controller_deployment(raw)
+        assert resource.ready_status == "degraded"
+
+    def test_not_ready_when_no_replicas_available(self):
+        raw = _make_deployment(
+            desired_replicas=1,
+            ready_replicas=0,
+            available_replicas=0,
+        )
+        resource = parse_controller_deployment(raw)
+        assert resource.ready_status == "not_ready"
+
+    def test_progressing_during_rollout(self):
+        raw = _make_deployment(
+            desired_replicas=1,
+            ready_replicas=0,
+            available_replicas=0,
+            conditions=[
+                {
+                    "type": "Progressing",
+                    "status": "True",
+                    "reason": "ReplicaSetUpdated",
+                    "message": "Updating replica set.",
+                    "lastTransitionTime": "2026-03-01T10:00:00Z",
+                }
+            ],
+        )
+        resource = parse_controller_deployment(raw)
+        assert resource.ready_status == "progressing"
+
+    def test_unknown_when_desired_is_zero(self):
+        raw = _make_deployment(desired_replicas=0, ready_replicas=0, available_replicas=0)
+        resource = parse_controller_deployment(raw)
+        assert resource.ready_status == "unknown"
+
+    def test_message_and_reason_from_available_condition(self):
+        raw = _make_deployment(
+            conditions=[
+                {
+                    "type": "Available",
+                    "status": "True",
+                    "reason": "MinimumReplicasAvailable",
+                    "message": "Deployment has minimum availability.",
+                    "lastTransitionTime": "2026-03-14T12:00:00Z",
+                }
+            ]
+        )
+        resource = parse_controller_deployment(raw)
+        assert resource.reason == "MinimumReplicasAvailable"
+        assert resource.message == "Deployment has minimum availability."
+        assert resource.reconcile_time == "2026-03-14T12:00:00Z"
+
+    def test_flux_conditions_converted(self):
+        raw = _make_deployment(
+            conditions=[
+                {
+                    "type": "Available",
+                    "status": "True",
+                    "reason": "MinimumReplicasAvailable",
+                    "message": "ok",
+                    "lastTransitionTime": "2026-03-14T12:00:00Z",
+                }
+            ]
+        )
+        resource = parse_controller_deployment(raw)
+        assert len(resource.conditions) == 1
+        cond = resource.conditions[0]
+        assert cond.type == "Available"
+        assert cond.status == "True"
+        assert cond.reason == "MinimumReplicasAvailable"
+
+    def test_empty_deployment(self):
+        """A completely empty deployment dict should not crash."""
+        resource = parse_controller_deployment({})
+        assert resource.kind == "ControllerComponent"
+        assert resource.name == ""
+        assert resource.namespace == ""
+        # No spec.replicas → defaults to 1; no ready replicas → not_ready
+        assert resource.ready_status == "not_ready"
+        assert resource.conditions == []
+
+    def test_no_containers_no_version(self):
+        raw = _make_deployment()
+        raw["spec"]["template"]["spec"]["containers"] = []
+        resource = parse_controller_deployment(raw)
+        assert "version" not in resource.extra_attributes

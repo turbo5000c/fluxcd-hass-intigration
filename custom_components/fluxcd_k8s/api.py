@@ -12,6 +12,8 @@ from .const import (
     ACCESS_MODE_IN_CLUSTER,
     FLUX_ARTIFACTGENERATOR,
     FLUX_BUCKET,
+    FLUX_CONTROLLER_NAMES,
+    FLUX_CONTROLLER_NAMESPACE,
     FLUX_DEPLOYMENTS,
     FLUX_EXTERNALARTIFACT,
     FLUX_FLUXINSTANCE,
@@ -26,7 +28,7 @@ from .const import (
     FLUX_RESOURCESETINPUTPROVIDER,
     FLUX_SOURCES,
 )
-from .models import FluxResource, parse_flux_resource
+from .models import FluxResource, parse_controller_deployment, parse_flux_resource
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,6 +106,7 @@ class FluxKubernetesClient:
 
         Iterates over each FluxCD resource kind across both Sources and
         Deployments categories and fetches them using the CustomObjectsApi.
+        Also fetches FluxCD controller Deployments from the flux-system namespace.
 
         Returns a list of parsed FluxResource objects.
         """
@@ -130,6 +133,9 @@ class FluxKubernetesClient:
                     flux_crd["kind"],
                     exc_info=True,
                 )
+
+        # Also fetch FluxCD controller deployments
+        all_resources.extend(await self.async_get_flux_controllers())
 
         return all_resources
 
@@ -196,6 +202,44 @@ class FluxKubernetesClient:
     async def async_fetch_resourcesets(self) -> list[FluxResource]:
         """Fetch ResourceSet resources."""
         return await self._async_fetch_single_kind(FLUX_RESOURCESET)
+
+    async def async_get_flux_controllers(self) -> list[FluxResource]:
+        """Fetch FluxCD controller Deployments from the flux-system namespace.
+
+        Queries the Kubernetes AppsV1 API for Deployments in the flux-system
+        namespace and returns only the known FluxCD controller names as
+        FluxResource objects with kind 'ControllerComponent'.  Missing
+        controllers are handled gracefully — they simply do not appear in the
+        returned list.
+        """
+        if not self._api_client:
+            await self.async_init()
+
+        apps_api = client.AppsV1Api(self._api_client)
+        results: list[FluxResource] = []
+        try:
+            response = await apps_api.list_namespaced_deployment(
+                namespace=FLUX_CONTROLLER_NAMESPACE
+            )
+            for deployment in response.items:
+                dep_name = deployment.metadata.name if deployment.metadata else ""
+                if dep_name not in FLUX_CONTROLLER_NAMES:
+                    continue
+                try:
+                    raw = self._api_client.sanitize_for_serialization(deployment)
+                    results.append(parse_controller_deployment(raw))
+                except Exception:
+                    _LOGGER.warning(
+                        "Failed to parse controller deployment: %s",
+                        dep_name,
+                        exc_info=True,
+                    )
+        except Exception:
+            _LOGGER.warning(
+                "Failed to fetch FluxCD controller components, skipping",
+                exc_info=True,
+            )
+        return results
 
     # ------------------------------------------------------------------
     # Internal helpers

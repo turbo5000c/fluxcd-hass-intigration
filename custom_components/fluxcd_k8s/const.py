@@ -24,6 +24,7 @@ DEFAULT_NAMESPACE = ""  # empty means all namespaces
 # Categories
 CATEGORY_SOURCES = "Sources"
 CATEGORY_DEPLOYMENTS = "Deployments"
+CATEGORY_CONTROLLERS = "Controllers"
 
 # ---------------------------------------------------------------------------
 # FluxCD CRD definitions
@@ -168,3 +169,20 @@ STATE_NOT_READY = "not_ready"
 STATE_PROGRESSING = "progressing"
 STATE_SUSPENDED = "suspended"
 STATE_UNKNOWN = "unknown"
+STATE_DEGRADED = "degraded"
+
+# ---------------------------------------------------------------------------
+# FluxCD controller component definitions
+# These are Kubernetes Deployments running in the flux-system namespace.
+# ---------------------------------------------------------------------------
+
+FLUX_CONTROLLER_NAMESPACE = "flux-system"
+
+FLUX_CONTROLLER_NAMES = [
+    "source-controller",
+    "kustomize-controller",
+    "helm-controller",
+    "notification-controller",
+    "image-reflector-controller",
+    "image-automation-controller",
+]

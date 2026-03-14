@@ -133,6 +133,24 @@ class TestFluxCRDDefinitions:
     def test_categories(self):
         assert const.CATEGORY_SOURCES == "Sources"
         assert const.CATEGORY_DEPLOYMENTS == "Deployments"
+        assert const.CATEGORY_CONTROLLERS == "Controllers"
+
+    def test_state_degraded(self):
+        assert const.STATE_DEGRADED == "degraded"
+
+    def test_controller_namespace(self):
+        assert const.FLUX_CONTROLLER_NAMESPACE == "flux-system"
+
+    def test_controller_names(self):
+        expected = {
+            "source-controller",
+            "kustomize-controller",
+            "helm-controller",
+            "notification-controller",
+            "image-reflector-controller",
+            "image-automation-controller",
+        }
+        assert set(const.FLUX_CONTROLLER_NAMES) == expected
 
     def test_all_crds_have_resource_type(self):
         """Every CRD definition must include a human-readable resource_type."""
