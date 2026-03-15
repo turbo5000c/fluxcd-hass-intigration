@@ -1,13 +1,14 @@
 {
   "domain": "fluxcd_k8s",
-  "name": "FluxCD",
+  "name": "FluxCD (Kubernetes)"
   "codeowners": ["@turbo5000c"],
   "config_flow": true,
-  "documentation": "https://github.com/turbo5000c/fluxcd-hass-intigration",
-  "issue_tracker": "https://github.com/turbo5000c/fluxcd-hass-intigration/issues",
+  "documentation": "https://github.com/turbo5000c/homeassistant-fluxcd",
+  "issue_tracker": "https://github.com/turbo5000c/homeassistant-fluxcd/issues",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "version": "0.1.5",
   "dependencies": [],
-  "requirements": ["kubernetes-asyncio==35.0.1"]
+  "requirements": ["kubernetes-asyncio==35.0.1"],
+  "loggers": ["kubernetes_asyncio"]
 }
