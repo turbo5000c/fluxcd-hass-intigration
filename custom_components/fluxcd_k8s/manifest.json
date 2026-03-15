@@ -5,7 +5,7 @@
   "config_flow": true,
   "documentation": "https://github.com/turbo5000c/fluxcd-hass-intigration",
   "issue_tracker": "https://github.com/turbo5000c/fluxcd-hass-intigration/issues",
-  "integration_type": "service",
+  "integration_type": "hub",
   "iot_class": "local_polling",
   "version": "0.1.5",
   "dependencies": [],
